@@ -1,9 +1,9 @@
 function plotssd!(ax, ssd, params=nothing; cumulative=false)
     (t, s), ssd = ssd
-    mass = sum(getindex.(ssd, 2))
-    ks = getindex.(ssd, 1)
+    mass = sum(getfield.(ssd, :n))
+    ks = getfield.(ssd, :k)
     maxk = _powerof2ceil(maximum(ks))
-    logps = exp.(log.(getindex.(ssd, 2)) .- log(mass))
+    logps = exp.(log.(getfield.(ssd, :n)) .- log(mass))
     if cumulative
         logps = reverse(cumsum(reverse(logps)))
     end
@@ -13,7 +13,8 @@ function plotssd!(ax, ssd, params=nothing; cumulative=false)
         _logphis = logphis(maxk, t, s, params...)[2:end];
         _logps = exp.(_logphis)
         if cumulative
-            _logps = reverse(cumsum(reverse(_logps)))
+            _logps = 1 .- vcat(0, cumsum(_logps))[1:end-1]
+            # _logps = reverse(cumsum(reverse(_logps)))
         end
         stairs!(ax, 1:length(_logphis), _logps, step=:center, color=Cycled(2), linewidth=5);
     end
@@ -42,7 +43,7 @@ function plotssds(ssds, params=nothing; cumulative=false)
         nbslices = length(ssds)
         fig = Figure(size=(1800, 600 * div(nbslices+1, 2)), fontsize=30);
         for (i, ((t, s), ssd)) in enumerate(ssds)
-            println(i, t, s)
+            println("$i t=$(round(t, digits=4))  s=$(round(s, digits=4))")
             ax = Axis(fig[div(i-1, 2)+1, mod1(i, 2)], 
             title="subtree size distribution ($(round(t, digits=3)), $(round(s, digits=3)))", 
             xlabel="subtree size", ylabel="probability",

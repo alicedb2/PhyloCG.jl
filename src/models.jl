@@ -30,8 +30,8 @@ function bdih!(du, u, p, t)
         du[1] += rho * g * (u[1] - 1) * u[1] / (1 - g * u[1])
     end
     if eta > 0
-        du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * _₂F₁(1, alpha + 1, alpha + beta + 1, u[1])
-        # du += eta * alpha / (alpha + beta) * (u - 1) * u * hyp2f1a1(alpha + 1, alpha + beta + 1, u)
+        # du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * _₂F₁(1, alpha + 1, alpha + beta + 1, u[1])
+        du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * hyp2f1a1(alpha + 1, alpha + beta + 1, u[1])
     end
     return nothing
 end
@@ -123,7 +123,7 @@ function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob
 
 end
 
-function slicelogprob(subtreesizedistribution, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace)
+function slicelogprob(subtreesizedistribution, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; maxsubtree=1000)
 
     truncN = maximum(first.(subtreesizedistribution)) + 1
 
@@ -134,19 +134,25 @@ function slicelogprob(subtreesizedistribution, t, s, f, b, d, rho, g, eta, alpha
     return logprob
 end
 
-function cgtreelogprob(cgtree, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; dropfirstslice=false, normalize=false)
+function cgtreelogprob(cgtree, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; dropfirstslice=false, normalize=false, maxsubtree=Inf)
     logprob = 0.0
     N = 0
     for ((t, s), ssd) in cgtree
         if s == 0 && dropfirstslice
             continue
         end
-        N += sum(getindex.(ssd, 2))
-        logprob += slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta, prob)
+        origN = sum(getfield.(ssd, :n))
+        ssd = filter(st -> st.k <= maxsubtree, ssd)
+        filteredN = sum(getfield.(ssd, :n))
+        # logprob += slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta, prob)
+        logprob += origN / filteredN * slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta, prob)
+        N += origN
     end
+
     if normalize
         logprob /= N
     end
+
     return logprob
 end
 
@@ -156,7 +162,7 @@ function log_jeffreys_betadist(a, b)
     return 1/2 * log(d - od)
 end
 
-function logdensity(cgtree, p::ComponentArray; hyperpriors=false, prob=_bdihprob_inplace)
+function logdensity(cgtree, p::ComponentArray; maxsubtree=Inf, prob=_bdihprob_inplace)
     lp = 0.0
     
     try
@@ -190,7 +196,7 @@ function logdensity(cgtree, p::ComponentArray; hyperpriors=false, prob=_bdihprob
         end
 
         if lp > -Inf # Don't bother if we are out of range
-            lp += cgtreelogprob(cgtree, p.f, p.b, p.d, p.i.rho, p.i.g, p.h.eta, p.h.alpha, p.h.beta, prob)
+            lp += cgtreelogprob(cgtree, p.f, p.b, p.d, p.i.rho, p.i.g, p.h.eta, p.h.alpha, p.h.beta, prob, maxsubtree=maxsubtree)
         end
 
         return lp

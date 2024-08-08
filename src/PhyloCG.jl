@@ -2,12 +2,12 @@ module PhyloCG
 using Roots: find_zero, Bisection
 using DifferentialEquations, LSODA
 using Random
-using Distributions: Normal, Beta, Gamma, Truncated, logpdf
+using Distributions: Normal, Beta, Gamma, Truncated, logpdf, MvNormal, MixtureModel
 using StatsBase
 using StatsFuns: logsumexp, logit, logistic
 using SpecialFunctions: loggamma, logabsgamma, polygamma
 using HypergeometricFunctions: _₂F₁
-using LinearAlgebra: diagind, diagm
+using LinearAlgebra: diagind, diagm, I
 using FFTW: irfft
 using ComponentArrays: ComponentArray, labels
 using ProgressMeter
@@ -31,12 +31,13 @@ include("models.jl")
 export bdih, bdih!, Ubdih, Phi
 export logphis, slicelogprob, cgtreelogprob, logdensity
 export initparams
-# export BDIH, BDIH_gaussian
 
-include("mcmc.jl")
-export AMWG, setmodel!, Chain, advance_chain!
+include("samplers.jl")
+export AMWG, AM, advance!
+
+include("chain.jl")
+export Chain, advance_chain!
 export chainsamples, bestsample
-# export SliceSampler
 
 include("plotting.jl")
 export plot, plotssd!, plotssd, plotssds

@@ -1,6 +1,6 @@
 function hyp2f1a1(b, c, z; maxiter=1000)
 
-    EPS = 2e-53
+    EPS = 2e-10
 
     if z == 0; return 1; end
     if z == 1; return (c - 1) / (c - b - 1); end
