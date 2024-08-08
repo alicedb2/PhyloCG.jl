@@ -14,14 +14,9 @@ mutable struct AMWG <: Sampler
     min_delta::Float64
 end
 
-function AMWG(; hyperpriors=false, kwargs...)
+function AMWG(; kwargs...)
     params = initparams(kwargs...)
-    if hyperpriors
-        mask = similar(params, Bool) .= true
-    else
-        mask = similar(params, Bool) .= true
-        mask.priors .= false
-    end
+    mask = similar(params, Bool) .= true
 
     return AMWG(
         -Inf,
@@ -36,58 +31,58 @@ end
 function setmodel!(sampler::AMWG, model::String="fbd")
 
     if contains(model, "f")
-        sampler.mask.cgmodel.f = true
-        if sampler.params.cgmodel.f == 1.0
-            sampler.params.cgmodel.f = 0.999
+        sampler.mask.f = true
+        if sampler.params.f == 1.0
+            sampler.params.f = 0.999
         end
     else
-        sampler.mask.cgmodel.f = false
-        sampler.params.cgmodel.f = 1.0
+        sampler.mask.f = false
+        sampler.params.f = 1.0
     end
 
     if contains(model, "b")
-        sampler.mask.cgmodel.b = true
-        if sampler.params.cgmodel.b == 0.0
-            sampler.params.cgmodel.b = 1.0
+        sampler.mask.b = true
+        if sampler.params.b == 0.0
+            sampler.params.b = 1.0
         end
     else
-        sampler.mask.cgmodel.b = false
-        sampler.params.cgmodel.b = 0.0
+        sampler.mask.b = false
+        sampler.params.b = 0.0
     end
 
     if contains(model, "d")
-        sampler.mask.cgmodel.d = true
-        if sampler.params.cgmodel.d == 0.0
-            sampler.cgmodel.d = 1.0
+        sampler.mask.d = true
+        if sampler.params.d == 0.0
+            sampler.d = 1.0
         end
     else
-        sampler.mask.cgmodel.d = false
-        sampler.params.cgmodel.d = 0.0
+        sampler.mask.d = false
+        sampler.params.d = 0.0
     end
 
     if contains(model, "i")
-        sampler.mask.cgmodel.i .= true
-        if sampler.params.cgmodel.i.rho == 0.0
-            sampler.cgmodel.i.rho = 1.0
+        sampler.mask.i .= true
+        if sampler.params.i.rho == 0.0
+            sampler.params.i.rho = 1.0
         end
     else
-        sampler.mask.cgmodel.i .= false
-        sampler.params.cgmodel.i.rho = 0.0
-        sampler.params.cgmodel.i.g = 0.5
+        sampler.mask.i .= false
+        sampler.params.i.rho = 0.0
+        sampler.params.i.g = 0.5
     end
 
     if contains(model, "h")
-        sampler.mask.cgmodel.h .= true
-        if sampler.params.cgmodel.h.eta == 0.0
-            sampler.params.cgmodel.h.eta = 1.0
-            sampler.params.cgmodel.h.alpha = 5.0
-            sampler.params.cgmodel.h.beta = 2.0
+        sampler.mask.h .= true
+        if sampler.params.h.eta == 0.0
+            sampler.params.h.eta = 1.0
+            sampler.params.h.alpha = 5.0
+            sampler.params.h.beta = 2.0
         end
     else
-        sampler.mask.cgmodel.h .= false
-        sampler.params.cgmodel.h.eta = 0.0
-        sampler.params.cgmodel.h.alpha = 5.0
-        sampler.params.cgmodel.h.beta = 2.0
+        sampler.mask.h .= false
+        sampler.params.h.eta = 0.0
+        sampler.params.h.alpha = 5.0
+        sampler.params.h.beta = 2.0
     end
 
     return sampler
@@ -128,7 +123,7 @@ function bestsample(chain::Chain)
 end
 
 function ess_rhat(chain::Chain, syms...; burn=0)
-    return ess_rhat(paramchain(chain, syms...; burn=burn))
+    return ess_rhat(chainsamples(chain, syms...; burn=burn))
 end
 
 function adjustlogscales!(sampler::AMWG; clearrates=true)

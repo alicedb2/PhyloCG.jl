@@ -160,36 +160,37 @@ function logdensity(cgtree, p::ComponentArray; hyperpriors=false, prob=_bdihprob
     lp = 0.0
     
     try
-        if 0.0 < p.cgmodel.f < 1.0
-            lp += logpdf(Truncated(Beta(p.priors.f.alpha, p.priors.f.beta), 0.001, 0.999), p.cgmodel.f)
+        if 0.001 < p.f < 1.0
+            lp += logpdf(Truncated(Beta(0.5, 0.5), 0.001, 0.999), p.f)
         end
         
-        if p.cgmodel.b > 0.0
-            lp -= 1/2 * log(p.cgmodel.b)
+        if p.b > 0.0
+            lp -= 1/2 * log(p.b)
         end
 
-        if p.cgmodel.d > 0.0
-            lp -= 1/2 * log(p.cgmodel.d)
+        if p.d > 0.0
+            lp -= 1/2 * log(p.d)
         end
         
-        if p.cgmodel.i.rho > 0.0
-            lp -= 1/2 * log(p.cgmodel.i.rho)
-            # lp += logpdf(Gamma(p.priors.b.alpha, p.priors.b.beta), p.cgmodel.b)
-            # lp += logpdf(Gamma(p.priors.d.alpha, p.priors.d.beta), p.cgmodel.d)
-            # lp += logpdf(Gamma(p.priors.i.rho.alpha, p.priors.i.rho.beta), p.cgmodel.i.rho)
-            lp += logpdf(Truncated(Beta(p.priors.i.g.alpha, p.priors.i.g.beta), 0, 0.999), p.cgmodel.i.g)
+        if p.i.rho > 0.0
+            lp -= 1/2 * log(p.i.rho)
+            # lp += logpdf(Gamma(p.priors.b.alpha, p.priors.b.beta), p.b)
+            # lp += logpdf(Gamma(p.priors.d.alpha, p.priors.d.beta), p.d)
+            # lp += logpdf(Gamma(p.priors.i.rho.alpha, p.priors.i.rho.beta), p.i.rho)
+            # lp += logpdf(Truncated(Beta(p.priors.i.g.alpha, p.priors.i.g.beta), 0, 0.999), p.i.g)
+            lp -= 1/2 * log(p.i.g) + log(1 - p.i.g)
         end
 
-        if p.cgmodel.h.eta > 0.0
-            lp -= 1/2 * log(p.cgmodel.h.eta)
-            # lp += logpdf(Gamma(p.priors.h.eta.alpha, p.priors.h.eta.beta), p.cgmodel.h.eta)
-            # lp += logpdf(Gamma(p.priors.h.alpha.alpha, p.priors.h.alpha.beta), p.cgmodel.h.alpha)
-            # lp += logpdf(Gamma(p.priors.h.beta.alpha, p.priors.h.beta.beta), p.cgmodel.h.beta)
-            lp += log_jeffreys_betadist(p.cgmodel.h.alpha, p.cgmodel.h.beta)
+        if p.h.eta > 0.0
+            lp -= 1/2 * log(p.h.eta)
+            # lp += logpdf(Gamma(p.priors.h.eta.alpha, p.priors.h.eta.beta), p.h.eta)
+            # lp += logpdf(Gamma(p.priors.h.alpha.alpha, p.priors.h.alpha.beta), p.h.alpha)
+            # lp += logpdf(Gamma(p.priors.h.beta.alpha, p.priors.h.beta.beta), p.h.beta)
+            lp += log_jeffreys_betadist(p.h.alpha, p.h.beta)
         end
 
         if lp > -Inf # Don't bother if we are out of range
-            lp += cgtreelogprob(cgtree, p.cgmodel.f, p.cgmodel.b, p.cgmodel.d, p.cgmodel.i.rho, p.cgmodel.i.g, p.cgmodel.h.eta, p.cgmodel.h.alpha, p.cgmodel.h.beta, prob)
+            lp += cgtreelogprob(cgtree, p.f, p.b, p.d, p.i.rho, p.i.g, p.h.eta, p.h.alpha, p.h.beta, prob)
         end
 
         return lp
@@ -201,24 +202,14 @@ end
 
 function initparams(;
     f=0.999, b=1.0, d=1.0, rho=0.0, g=0.5, eta=0.0, alpha=5.0, beta=2.0,
-    fpriora=0.5, fpriorb=0.5, # Bernoulli Jeffreys Beta(1/2, 1/2)
-    bpriora=1.0, bpriorb=5.0,
-    dpriora=1.0, dpriorb=5.0,
-    rhopriora=1.0, rhopriorb=5.0,
-    gpriora=0.5, gpriorb=0.01, # Approx Jeffreys Beta(1/2, 0)
-    etapriora=1.0, etapriorb=5.0, 
-    alphapriora=1.1, alphapriorb=4.0, 
-    betapriora=1.1, betapriorb=4.0
+    # fpriora=0.5, fpriorb=0.5, # Bernoulli Jeffreys Beta(1/2, 1/2)
+    # bpriora=1.0, bpriorb=5.0,
+    # dpriora=1.0, dpriorb=5.0,
+    # rhopriora=1.0, rhopriorb=5.0,
+    # gpriora=0.5, gpriorb=0.01, # Approx Jeffreys Beta(1/2, 0)
+    # etapriora=1.0, etapriorb=5.0, 
+    # alphapriora=1.1, alphapriorb=4.0, 
+    # betapriora=1.1, betapriorb=4.0
     )
-    return ComponentArray(
-        cgmodel=(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta)),
-        priors=(f=(alpha=fpriora, beta=fpriorb), 
-                b=(alpha=bpriora, beta=bpriorb), 
-                d=(alpha=dpriora, beta=dpriorb), 
-                i=(rho=(alpha=rhopriora, beta=rhopriorb), 
-                   g=(alpha=gpriora, beta=gpriorb)), 
-                h=(eta=(alpha=etapriora, beta=etapriorb), 
-                   alpha=(alpha=alphapriora, beta=alphapriorb), 
-                   beta=(alpha=betapriora, beta=betapriorb)))
-    )
+    return ComponentArray(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta))
 end

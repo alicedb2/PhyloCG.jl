@@ -39,6 +39,6 @@ export chainsamples, bestsample
 # export SliceSampler
 
 include("plotting.jl")
-export plot, plotssd!
+export plot, plotssd!, plotssd, plotssds
 
 end

@@ -1,24 +1,56 @@
-function plotssd!(ax, ssd, params=nothing)
+function plotssd!(ax, ssd, params=nothing; cumulative=false)
     (t, s), ssd = ssd
     mass = sum(getindex.(ssd, 2))
     ks = getindex.(ssd, 1)
     maxk = _powerof2ceil(maximum(ks))
     logps = exp.(log.(getindex.(ssd, 2)) .- log(mass))
-    logps = reverse(cumsum(reverse(logps)))
-    barplot!(ax, ks .+ 0.5, logps, fillto=1/2/mass, gap=0.0, alpha=0.4, width=Makie.automatic);
+    if cumulative
+        logps = reverse(cumsum(reverse(logps)))
+    end
+    barplot!(ax, ks, logps, fillto=1/2/mass, gap=0.0, alpha=0.4, width=1)
 
     if params !== nothing
-        _logphis = logphis(maxk, t, s, params.cgmodel...)[2:end];
-        # map_logphis = logphis(maxn, t, s, map_est...)[2:end];
+        _logphis = logphis(maxk, t, s, params...)[2:end];
         _logps = exp.(_logphis)
-        _logps = reverse(cumsum(reverse(_logps)))
-        stairs!(ax, 1:length(_logphis) .+ 0.5, _logps, step=:post, color=Cycled(2), linewidth=3);
+        if cumulative
+            _logps = reverse(cumsum(reverse(_logps)))
+        end
+        stairs!(ax, 1:length(_logphis), _logps, step=:center, color=Cycled(2), linewidth=5);
     end
 
     xlims!(ax, 1, maxk);
-    ylims!(ax, 1/2/mass, 1);
+    ylims!(ax, 1/2/mass, 1.5);
 
     return ax
+end
+
+function plotssd(ssd, params=nothing; cumulative=false)
+    with_theme(theme_minimal()) do
+        fig = Figure(size=(800, 600), fontsize=30);
+        ax = Axis(fig[1, 1], 
+        title="subtree size distribution ($(round(ssd[1][1], digits=3)), $(round(ssd[1][2], digits=3)))", 
+        xlabel="subtree size", ylabel="probability",
+        xscale=log2, yscale=log);
+        plotssd!(ax, ssd, params, cumulative=cumulative);
+        return fig
+    end
+end
+
+function plotssds(ssds, params=nothing; cumulative=false)
+    with_theme(theme_minimal()) do
+        ssds = sort(ssds, by=x->x[1])
+        nbslices = length(ssds)
+        fig = Figure(size=(1800, 600 * div(nbslices+1, 2)), fontsize=30);
+        for (i, ((t, s), ssd)) in enumerate(ssds)
+            println(i, t, s)
+            ax = Axis(fig[div(i-1, 2)+1, mod1(i, 2)], 
+            title="subtree size distribution ($(round(t, digits=3)), $(round(s, digits=3)))", 
+            xlabel="subtree size", ylabel="probability",
+            xscale=log2, yscale=log);
+            plotssd!(ax, ((t, s), ssd), params, cumulative=cumulative);
+        end
+        return fig
+    end
 end
 
 function plot(chain; burn=0)
@@ -26,7 +58,7 @@ function plot(chain; burn=0)
         nbparams = sum(chain.sampler.mask[:])
         fig = Figure(size=(1600, 400 * (1 + nbparams)), fontsize=30);
 
-        _labels = replace.(labels(chain.sampler.params), Ref("cgmodel." => ""))
+        _labels = replace.(labels(chain.sampler.params), Ref("" => ""))
 
         axtrace = Axis(fig[1, 1], title="log density", xlabel="iteration", ylabel="log density");
         _samples = chainsamples(chain, :logdensity, burn=burn)       
