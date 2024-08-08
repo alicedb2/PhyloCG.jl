@@ -1,7 +1,3 @@
-function init_params(; f=1.0, b=1.0, d=1.0, rho=0.0, g=0.5, eta=1.0, alpha=1.0, beta=1.0)
-    return ComponentArray(f=f, b=b, d=d, rho=rho, g=g, eta=eta, alpha=alpha, beta=beta)
-end
-
 function bdih(u, p, t)
     b, d, rho, g, eta, alpha, beta = p
     du = 0
@@ -93,27 +89,26 @@ function _powerof2ceil(n)
     return 2^ceil(Integer, log2(n))
 end
 
-# function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; gap=1/_powerof2ceil(truncN), optimizeradius=false)::Vector{Real}
-function logphis(truncN::Int, t::Real, s::Real, p::ComponentArray, prob=_bdihprob_inplace; gap=1/_powerof2ceil(truncN), optimizeradius=false)::Vector{Real}
+function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; gap=1/_powerof2ceil(truncN), optimizeradius=false)::Vector{Real}
     # Make sure the total number of state
     # is the closest power of two larger than n
     
     n = _powerof2ceil(truncN)
 
-    if t < s || s < 0.0 || !(0 <= p.f <= 1) || p.b < 0 || p.d < 0 || p.rho < 0 || !(0 <= p.g <= 1) || p.eta < 0 || p.alpha < 0 || p.beta < 0
+    if t < s || s < 0.0 || !(0 <= f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 <= g <= 1) || eta < 0 || alpha < 0 || beta < 0
         return fill(-Inf, n)
     end
 
     if optimizeradius
-        r = bdihPhi_optimal_radius(n, t, s, p.f, p.b, p.d, p.rho, p.g, p.eta, p.alpha, p.beta, prob)
+        r = bdihPhi_optimal_radius(n, t, s, f, b, d, rho, g, eta, alpha, beta, prob)
     else 
-        r = bdihPhi_singularity(t, s, p.f, p.b, p.d, p.rho, p.g, p.eta, p.alpha, p.beta, prob) - gap
+        r = bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta, prob) - gap
     end
 
     complex_halfcircle = r * exp.(2pi * im * (0:div(n, 2)) / n)
 
     # try
-        Phi_samples = [Phi(z, t, s, p.f, p.b, p.d, p.rho, p.g, p.eta, p.alpha, p.beta, prob) for z in complex_halfcircle]
+        Phi_samples = [Phi(z, t, s, f, b, d, rho, g, eta, alpha, beta, prob) for z in complex_halfcircle]
         # Phi_samples = Phi.(complex_halfcircle, t, s, f, b, d, rho, g, eta, alpha, beta, Ref(prob))
         upks = irfft(conj(Phi_samples), n) # Hermitian FFT
         # correct for 0
@@ -128,18 +123,18 @@ function logphis(truncN::Int, t::Real, s::Real, p::ComponentArray, prob=_bdihpro
 
 end
 
-function slicelogprob(subtreesizedistribution, t::Real, s::Real, p::ComponentArray, prob=_bdihprob_inplace)::Real
+function slicelogprob(subtreesizedistribution, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace)
 
     truncN = maximum(first.(subtreesizedistribution)) + 1
 
-    phiks = logphis(truncN, t, s, p, prob)[2:end]
+    phiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, prob)[2:end]
 
     logprob = sum([n * phiks[k] for (k, n) in subtreesizedistribution])
 
     return logprob
 end
 
-function cgtreelogprob(cgtree, p::ComponentArray, prob=_bdihprob_inplace; dropfirstslice=false, normalize=false)::Real
+function cgtreelogprob(cgtree, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; dropfirstslice=false, normalize=false)
     logprob = 0.0
     N = 0
     for ((t, s), ssd) in cgtree
@@ -147,7 +142,7 @@ function cgtreelogprob(cgtree, p::ComponentArray, prob=_bdihprob_inplace; dropfi
             continue
         end
         N += sum(getindex.(ssd, 2))
-        logprob += slicelogprob(ssd, t, s, p, prob)
+        logprob += slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta, prob)
     end
     if normalize
         logprob /= N
@@ -155,104 +150,75 @@ function cgtreelogprob(cgtree, p::ComponentArray, prob=_bdihprob_inplace; dropfi
     return logprob
 end
 
-# @model function BDIH(cgtree, model="fbdih", prob=_bdihprob_inplace)
+function log_jeffreys_betadist(a, b)
+    d = (polygamma(1, a) - polygamma(1, a + b)) * (polygamma(1, b) - polygamma(1, a + b))
+    od = polygamma(1, a + b)^2
+    return 1/2 * log(d - od)
+end
+
+function logdensity(cgtree, p::ComponentArray; hyperpriors=false, prob=_bdihprob_inplace)
+    lp = 0.0
     
-#     f ~ Beta(1.05, 1.0)
-#     b ~ Gamma(1.0, 4.0)
-#     d ~ Gamma(1.0, 4.0)
-#     rho ~ Gamma(1.0, 4.0)
-#     g ~ Beta(1.05, 1.05)
-#     eta ~ Gamma(1.0, 4.0)
-#     alpha ~ Gamma(1.1, 4.0)
-#     beta ~ Gamma(1.1, 4.0)
+    try
+        if 0.0 < p.cgmodel.f < 1.0
+            lp += logpdf(Truncated(Beta(p.priors.f.alpha, p.priors.f.beta), 0.001, 0.999), p.cgmodel.f)
+        end
+        
+        if p.cgmodel.b > 0.0
+            lp -= 1/2 * log(p.cgmodel.b)
+        end
 
-#     print(" $(round(f, digits=4)), $(round(b, digits=4)), $(round(d, digits=4)), $(round(rho, digits=4)), $(round(g, digits=4)), $(round(eta, digits=4)), $(round(alpha, digits=4)), $(round(beta, digits=4))")
+        if p.cgmodel.d > 0.0
+            lp -= 1/2 * log(p.cgmodel.d)
+        end
+        
+        if p.cgmodel.i.rho > 0.0
+            lp -= 1/2 * log(p.cgmodel.i.rho)
+            # lp += logpdf(Gamma(p.priors.b.alpha, p.priors.b.beta), p.cgmodel.b)
+            # lp += logpdf(Gamma(p.priors.d.alpha, p.priors.d.beta), p.cgmodel.d)
+            # lp += logpdf(Gamma(p.priors.i.rho.alpha, p.priors.i.rho.beta), p.cgmodel.i.rho)
+            lp += logpdf(Truncated(Beta(p.priors.i.g.alpha, p.priors.i.g.beta), 0, 0.999), p.cgmodel.i.g)
+        end
 
-#     datalikelihood = cgtreelogprob(cgtree, 
-#             contains(model, 'f') ? f : 1.0,
-#             contains(model, 'b') ? b : 0.0,
-#             contains(model, 'd') ? d : 0.0, 
-#             contains(model, 'i') ? rho : 0.0,
-#             contains(model, 'i') ? g : 0.5, 
-#             contains(model, 'h') ? eta : 0.0, 
-#             contains(model, 'h') ? alpha : 1.0,
-#             contains(model, 'h') ? beta : 1.0,
-#             prob
-#         )
-#     println(" $(round(datalikelihood, digits=4))")
-#     DynamicPPL.@addlogprob! datalikelihood
-#     return (; f, b, d, rho, g, eta, alpha, beta, datalikelihood)
+        if p.cgmodel.h.eta > 0.0
+            lp -= 1/2 * log(p.cgmodel.h.eta)
+            # lp += logpdf(Gamma(p.priors.h.eta.alpha, p.priors.h.eta.beta), p.cgmodel.h.eta)
+            # lp += logpdf(Gamma(p.priors.h.alpha.alpha, p.priors.h.alpha.beta), p.cgmodel.h.alpha)
+            # lp += logpdf(Gamma(p.priors.h.beta.alpha, p.priors.h.beta.beta), p.cgmodel.h.beta)
+            lp += log_jeffreys_betadist(p.cgmodel.h.alpha, p.cgmodel.h.beta)
+        end
 
-# end
+        if lp > -Inf # Don't bother if we are out of range
+            lp += cgtreelogprob(cgtree, p.cgmodel.f, p.cgmodel.b, p.cgmodel.d, p.cgmodel.i.rho, p.cgmodel.i.g, p.cgmodel.h.eta, p.cgmodel.h.alpha, p.cgmodel.h.beta, prob)
+        end
 
-# @model function BDIH_gaussian(cgtree, model="fbdih", prob=_bdihprob_inplace; bounds=true)
-    
-#     # logitf ~ Flat()
-#     # logb ~ Flat()
-#     # logd ~ Flat()
-#     # logrho ~ Flat()
-#     # logitg ~ Flat()
-#     # logeta ~ Flat()
-#     # logalpha ~ Flat()
-#     # logbeta ~ Flat()
+        return lp
+    catch _
+        return -Inf
+    end
 
-#     # logitf ~ Normal(0, 1.7)
-#     # logb ~ Normal(log(5), 2)
-#     # logd ~ Normal(log(5), 2)
-#     # logrho ~ Normal(log(5), 2)
-#     # logitg ~ Normal(0, 1.7)
-#     # logeta ~ Normal(log(5), 2)
-#     # logalpha ~ Normal(log(5), 2)
-#     # logbeta ~ Normal(log(5), 2)
-    
-#     params ~ MvNormal([0, 0, 0, 0, 0, 0, 0, 0], 
-#                       diagm([2.6, 2, 2, 2, 1.7, 2, 2, 2]))
+end
 
-#     f = logistic(params[1])
-#     b = exp(params[2])
-#     d = exp(params[3])
-#     rho = exp(params[4])
-#     g = logistic(params[5])
-#     eta = exp(params[6])
-#     alpha = exp(params[7])
-#     beta = exp(params[8])
-    
-#     # Jacobian from changes of variables
-#     @addlogprob! -log(abs(f)) - log(abs(1 - f))
-#     @addlogprob! -log(abs(b))
-#     @addlogprob! -log(abs(d))
-#     @addlogprob! -log(abs(rho)) - log(abs(g)) - log(abs(1 - g))
-#     @addlogprob! -log(abs(eta)) - log(abs(alpha)) - log(abs(beta))
-
-#     print(" $(round(f, digits=4)), $(round(b, digits=4)), $(round(d, digits=4)), $(round(rho, digits=4)), $(round(g, digits=4)), $(round(eta, digits=4)), $(round(alpha, digits=4)), $(round(beta, digits=4))")
-    
-#     if bounds && (!(0.001 <= f <= 1) || !(0.0 <= b <= 10) || !(0.0 <= d <= 10) || !(0.0 <= rho <= 10) || !(0.001 <= g <= 0.999) || !(0.0 <= eta <= 10) || !(0.001 <= alpha <= 16) || !(0.001 <= beta <= 3))
-#         println(" -Inf")
-#         datalikelihood = -Inf
-#         DynamicPPL.@addlogprob! datalikelihood
-#         return (; f, b, d, rho, g, eta, alpha, beta, datalikelihood)
-#     else
-#         try
-#             datalikelihood = cgtreelogprob(cgtree, 
-#                     contains(model, 'f') ? f : 1.0,
-#                     contains(model, 'b') ? b : 0.0,
-#                     contains(model, 'd') ? d : 0.0, 
-#                     contains(model, 'i') ? rho : 0.0,
-#                     contains(model, 'i') ? g : 0.5, 
-#                     contains(model, 'h') ? eta : 0.0, 
-#                     contains(model, 'h') ? alpha : 1.0,
-#                     contains(model, 'h') ? beta : 1.0,
-#                     prob
-#                 )
-#             println(" $(round(datalikelihood, digits=4))")
-#             @addlogprob! datalikelihood
-#             return (; f, b, d, rho, g, eta, alpha, beta, datalikelihood)
-#         catch e
-#             println(" -Inf")
-#             datalikelihood = -Inf
-#             @addlogprob! datalikelihood
-#             return (; f, b, d, rho, g, eta, alpha, beta, datalikelihood=Inf)
-#         end
-#     end
-
-# end
+function initparams(;
+    f=0.999, b=1.0, d=1.0, rho=0.0, g=0.5, eta=0.0, alpha=5.0, beta=2.0,
+    fpriora=0.5, fpriorb=0.5, # Bernoulli Jeffreys Beta(1/2, 1/2)
+    bpriora=1.0, bpriorb=5.0,
+    dpriora=1.0, dpriorb=5.0,
+    rhopriora=1.0, rhopriorb=5.0,
+    gpriora=0.5, gpriorb=0.01, # Approx Jeffreys Beta(1/2, 0)
+    etapriora=1.0, etapriorb=5.0, 
+    alphapriora=1.1, alphapriorb=4.0, 
+    betapriora=1.1, betapriorb=4.0
+    )
+    return ComponentArray(
+        cgmodel=(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta)),
+        priors=(f=(alpha=fpriora, beta=fpriorb), 
+                b=(alpha=bpriora, beta=bpriorb), 
+                d=(alpha=dpriora, beta=dpriorb), 
+                i=(rho=(alpha=rhopriora, beta=rhopriorb), 
+                   g=(alpha=gpriora, beta=gpriorb)), 
+                h=(eta=(alpha=etapriora, beta=etapriorb), 
+                   alpha=(alpha=alphapriora, beta=alphapriorb), 
+                   beta=(alpha=betapriora, beta=betapriorb)))
+    )
+end
