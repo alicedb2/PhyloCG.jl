@@ -92,7 +92,7 @@ function AMWG(model="fbd")
             similar(params, Float64) .= 0.0,
             similar(params, Int) .= 0,
             similar(params, Int) .= 0,
-            0, 10, 0, 0.44, 0.01)
+            0, 20, 0, 0.44, 0.01)
     setmodel!(sampler, model)
     return sampler
 end
@@ -103,7 +103,7 @@ function adjustlogscales!(sampler::AMWG; clearrates=true)
     delta_n = min(s.min_delta, 1/sqrt(s.nb_batches))
 
     acc_rates = s.acc[s.mask] ./ (s.acc[s.mask] .+ s.rej[s.mask])
-    s.logscales[s.mask] .+= delta_n .* (acc_rates .> s.acceptance_target) .- delta_n .* (acc_rates .<= s.acceptance_target)
+    s.logscales[s.mask] .+= delta_n .* (acc_rates .> s.acceptance_target) .- delta_n .* (acc_rates .< s.acceptance_target)
 
     if clearrates
         s.acc .= 0
@@ -153,20 +153,72 @@ function am_sigma(L::Int, x::Vector{Float64}, xx::Matrix{Float64}; correction=tr
     return sigma
 end
 
+mutable struct LatentSlice <: Sampler
+    current_logprob::Float64
+    params::ComponentArray{Float64}
+    mask::ComponentArray{Bool}
+    iter::Int
+    latent_s::ComponentArray{Float64}
+    scales::ComponentArray{Float64}
+    lbnds::ComponentArray{Float64}
+    ubnds::ComponentArray{Float64}
+end
+
+function LatentSlice(model="fbd")
+    params = initparams()
+    mask = similar(params, Bool)
+    setmodel!(params, mask, model)
+    
+    scales = fill!(similar(params), 1.0)
+    # scales.f = 0.2
+    # scales.i.g = 0.2
+
+    lbnds = fill!(similar(params), 0.0)
+    ubnds = fill!(similar(params), Inf)
+    ubnds.f = 1.0
+    ubnds.b = 12.0
+    ubnds.d = 12.0
+    ubnds.i.rho = 12.0
+    ubnds.i.g = 1.0
+    ubnds.h.eta = 12.0
+    ubnds.h.alpha = 20.0
+    ubnds.h.beta = 5.0
+
+    return LatentSlice(
+        -Inf,
+        params,
+        mask,
+        1,
+        fill!(similar(params), 0.5),
+        scales,
+        lbnds,
+        ubnds
+    )
+end
 
 function advance!(sampler::AMWG, cgtree)
     s = sampler
 
     if s.iter > s.batch_size
+        s.nb_batches += 1
         adjustlogscales!(s)
         s.iter = 1
     end
 
     for i in findall(s.mask[:])
         p_new = deepcopy(s.params)
-        p_new[i] += exp(s.logscales[i]) * randn()
+        if i == 6
+            du = exp(s.logscales[i]) * randn()
+            p_new[6:7] .= _ea((_uv(s.params.h.eta, s.params.h.alpha, s.params.h.beta) .+ [du, 0.0])..., s.params.h.beta)
+        elseif i == 7
+            dv = exp(s.logscales[i]) * randn()
+            p_new[6:7] .= _ea((_uv(s.params.h.eta, s.params.h.alpha, s.params.h.beta) .+ [0.0, dv])..., s.params.h.beta)
+        else
+            p_new[i] += exp(s.logscales[i]) * randn()
+        end
         logprob_new = logdensity(cgtree, p_new)
         accprob = logprob_new - s.current_logprob
+        accprob += logjac_deaduv(p_new.h.eta, p_new.h.alpha, p_new.h.beta) - logjac_deaduv(s.params.h.eta, s.params.h.alpha, s.params.h.beta)
         if log(rand()) < accprob
             s.params .= p_new
             s.current_logprob = logprob_new
@@ -211,6 +263,79 @@ function advance!(sampler::AM, cgtree)
 
     s.iter += 1
     
+    return s
+
+end
+
+function advance!(sampler::LatentSlice, cgtree)
+    s = sampler
+
+    for i in shuffle!(findall(s.mask[:]))
+        log_w = s.current_logprob + log(rand())
+        l = rand(Uniform(s.params[i] - s.latent_s[i]/2, s.params[i] + s.latent_s[i]/2))
+        latent_s = 2 * abs(l - s.params[i]) + rand(Exponential(s.scales[i]))
+        s.latent_s[i] = latent_s
+        
+        lbnd = max(s.lbnds[i], l - latent_s/2)
+        ubnd = min(s.ubnds[i], l + latent_s/2)
+
+        new_params = copy(s.params)
+        new_params[i] = rand(Uniform(lbnd, ubnd))
+        logprob = logdensity(cgtree, new_params)
+        while log_w > logprob
+            if new_params[i] < s.params[i]
+                lbnd = max(lbnd, new_params[i])
+            else
+                ubnd = min(ubnd, new_params[i])
+            end
+            new_params[i] = rand(Uniform(lbnd, ubnd))
+            logprob = logdensity(cgtree, new_params)
+        end
+        s.params = new_params
+        s.current_logprob = logprob
+    end
+
+    s.iter += 1
+
+    return s
+
+end
+
+function _advance!(sampler::LatentSlice, cgtree)
+    s = sampler
+    mask = s.mask
+
+    log_w = s.current_logprob + log(rand())
+
+    l = rand.(Uniform.(s.params[mask] .- s.latent_s[mask]/2, s.params[mask] .+ s.latent_s[mask]/2))
+    latent_s = 2 * abs.(l .- s.params[mask]) .+ rand.(Exponential.(s.scales[mask]))
+    s.latent_s[mask] .= latent_s
+
+
+    lbox = max.(s.lbnds[mask], l .- latent_s ./ 2)
+    ubox = min.(s.ubnds[mask], l .+ latent_s ./ 2)
+
+    new_params = copy(s.params)
+    new_params[mask] .= rand.(Uniform.(lbox, ubox))
+    logprob = logdensity(cgtree, new_params)
+    while log_w > logprob
+        for i in dims(s)
+            if new_params[mask][i] < s.params[mask][i]
+                lbox[i] = max(lbox[i], new_params[mask][i])
+            else
+                ubox[i] = min(ubox[i], new_params[mask][i])
+            end
+        end
+        new_params[mask] .= rand.(Uniform.(lbox, ubox))
+        println(new_params)
+        logprob = logdensity(cgtree, new_params)
+    end
+
+    s.params = new_params
+    s.current_logprob = logprob
+
+    s.iter += 1
+
     return s
 
 end

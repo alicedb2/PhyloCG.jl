@@ -30,8 +30,8 @@ function bdih!(du, u, p, t)
         du[1] += rho * g * (u[1] - 1) * u[1] / (1 - g * u[1])
     end
     if eta > 0
-        # du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * _₂F₁(1, alpha + 1, alpha + beta + 1, u[1])
-        du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * hyp2f1a1(alpha + 1, alpha + beta + 1, u[1])
+        du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * _₂F₁(1, alpha + 1, alpha + beta + 1, u[1])
+        # du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * hyp2f1a1(alpha + 1, alpha + beta + 1, u[1])
     end
     return nothing
 end
@@ -86,7 +86,7 @@ function Phi(y, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace)
 end
 
 function _powerof2ceil(n)
-    return 2^ceil(Integer, log2(n))
+    return 2^ceil(Int, log2(n))
 end
 
 function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; gap=1/_powerof2ceil(truncN), optimizeradius=false)::Vector{Real}
@@ -218,4 +218,20 @@ function initparams(;
     # betapriora=1.1, betapriorb=4.0
     )
     return ComponentArray(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta))
+end
+
+
+_uv(e, a, b) = [e * a^b, a^2 - b * e^2]
+
+function _ea(u, v, b)
+    e0 = sqrt(sqrt(v^2 + 4 * u^2) - v) / sqrt(2)
+    a0 = sqrt(2) * u / sqrt(sqrt(v^2 + 4 * u^2) - v)
+    function f(ea)
+        if any(ea .<= 0)
+            return Inf
+        end
+        return abs(u - ea[1] * ea[2]^b)^2 + abs(v - ea[2]^2 + b * ea[1]^2)^2
+    end
+    optres = optimize(f, [e0, a0], NelderMead())
+    return optres.minimizer
 end

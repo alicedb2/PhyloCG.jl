@@ -5,7 +5,11 @@ mutable struct Chain
     logprob_chain::Vector{Float64}
 end
 
-Chain(cgtree, sampler) = Chain(sampler, cgtree, [], [])
+function Chain(cgtree, sampler)
+    chain = Chain(sampler, cgtree, [], [])
+    chain.sampler.current_logprob = logdensity(cgtree, sampler.params)
+    return chain
+end
 
 function chainsamples(chain::Chain, syms...; burn=0)
     if burn < 0
@@ -47,3 +51,5 @@ function advance_chain!(chain, n_iter)
 
     return chain
 end
+
+logjac_deaduv(e, a, beta) = -log(2) - (beta + 1) * log(a) - log(1 + (e * beta / a)^2)
