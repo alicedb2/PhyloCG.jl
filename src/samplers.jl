@@ -85,14 +85,15 @@ end
 function AMWG(model="fbd")
     params = initparams()
     mask = similar(params, Bool)
+    logscales = fill!(similar(params, Float64), -2.0)
     sampler = AMWG(
-            -Inf,
-            params,
-            mask,
-            similar(params, Float64) .= 0.0,
-            similar(params, Int) .= 0,
-            similar(params, Int) .= 0,
-            0, 20, 0, 0.44, 0.01)
+            -Inf,       # current_logprob
+            params,     # params
+            mask,       # mask
+            logscales,  # logscales
+            fill!(similar(params, Int), 0), # accepted
+            fill!(similar(params, Int), 0), # rejected
+            0, 20, 0, 0.44, 0.01) # iter, batch_size, nb_batches, acceptance_target, min_delta
     setmodel!(sampler, model)
     return sampler
 end
@@ -205,20 +206,27 @@ function advance!(sampler::AMWG, cgtree)
         s.iter = 1
     end
 
-    for i in findall(s.mask[:])
+    for i in shuffle!(findall(s.mask[:]))
         p_new = deepcopy(s.params)
         if i == 6
-            du = exp(s.logscales[i]) * randn()
-            p_new[6:7] .= _ea((_uv(s.params.h.eta, s.params.h.alpha, s.params.h.beta) .+ [du, 0.0])..., s.params.h.beta)
+            du = exp(s.logscales[6]) * randn()
+            p_new[6:8] .= _eab((_uvw(s.params.h.eta, s.params.h.alpha, s.params.h.beta) .+ [du, 0.0, 0.0])...)
         elseif i == 7
-            dv = exp(s.logscales[i]) * randn()
-            p_new[6:7] .= _ea((_uv(s.params.h.eta, s.params.h.alpha, s.params.h.beta) .+ [0.0, dv])..., s.params.h.beta)
+            dv = exp(s.logscales[7]) * randn()
+            p_new[6:8] .= _eab((_uvw(s.params.h.eta, s.params.h.alpha, s.params.h.beta) .+ [0.0, dv, 0.0])...)
+        elseif i == 8
+            dw = exp(s.logscales[8]) * randn()
+            p_new[6:8] .= _eab((_uvw(s.params.h.eta, s.params.h.alpha, s.params.h.beta) .+ [0.0, 0.0, dw])...)
         else
             p_new[i] += exp(s.logscales[i]) * randn()
         end
         logprob_new = logdensity(cgtree, p_new)
-        accprob = logprob_new - s.current_logprob
-        accprob += logjac_deaduv(p_new.h.eta, p_new.h.alpha, p_new.h.beta) - logjac_deaduv(s.params.h.eta, s.params.h.alpha, s.params.h.beta)
+        if logprob_new > -Inf
+            accprob = logprob_new - s.current_logprob
+            accprob += logjac_deabduvw(p_new.h.eta, p_new.h.alpha, p_new.h.beta) - logjac_deabduvw(s.params.h.eta, s.params.h.alpha, s.params.h.beta)
+        else
+            accprob = -Inf
+        end
         if log(rand()) < accprob
             s.params .= p_new
             s.current_logprob = logprob_new

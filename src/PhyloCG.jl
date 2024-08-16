@@ -1,7 +1,7 @@
 module PhyloCG
 using Roots: find_zero, Bisection
 using Optim: optimize, NelderMead
-using DifferentialEquations, LSODA
+using DifferentialEquations
 using Random
 using Distributions: Normal, Beta, Gamma, Truncated, 
                      logpdf, MvNormal, MixtureModel, 
@@ -34,14 +34,14 @@ include("models.jl")
 export bdih, bdih!, Ubdih, Phi
 export logphis, slicelogprob, cgtreelogprob, logdensity
 export initparams
-export _ea, _uv
+export _ea, _uv, _uvw, _eab
 
 include("samplers.jl")
 export AMWG, AM, LatentSlice, advance!
 
 include("chain.jl")
 export Chain, advance_chain!
-export chainsamples, bestsample, ess_rhat
+export chainsamples, bestsample, ess_rhat, burn!
 
 include("plotting.jl")
 export plot, plotssd!, plotssd, plotssds

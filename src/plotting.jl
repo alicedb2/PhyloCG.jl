@@ -3,25 +3,26 @@ function plotssd!(ax, ssd, params=nothing; cumulative=false)
     mass = sum(getfield.(ssd, :n))
     ks = getfield.(ssd, :k)
     maxk = _powerof2ceil(maximum(ks))
-    logps = exp.(log.(getfield.(ssd, :n)) .- log(mass))
+    ps = exp.(log.(getfield.(ssd, :n)) .- log(mass))
     if cumulative
-        logps = reverse(cumsum(reverse(logps)))
+        ps = 1 .- vcat(0, cumsum(ps))[1:end-1]
+        # ps = reverse(cumsum(reverse(ps)))
     end
-    barplot!(ax, ks, logps, fillto=1/2/mass, gap=0.0, alpha=0.4, width=1)
+    barplot!(ax, ks, ps, fillto=1/2/mass, gap=0.0, alpha=0.4, width=1)
 
     if params !== nothing
         _logphis = logphis(maxk, t, s, params...)[2:end];
-        _logps = exp.(_logphis)
+        _ps = exp.(_logphis)
         if cumulative
-            _logps = 1 .- vcat(0, cumsum(_logps))[1:end-1]
-            # _logps = reverse(cumsum(reverse(_logps)))
+            _ps = 1 .- vcat(0, cumsum(_ps))[1:end-1]
+            # _ps = reverse(cumsum(reverse(_ps)))
         end
-        stairs!(ax, 1:length(_logphis), _logps, step=:center, color=Cycled(2), linewidth=5);
+        stairs!(ax, 1:length(_ps), _ps, step=:center, color=Cycled(2), linewidth=7);
     end
 
-    xlims!(ax, 1, maxk);
-    ylims!(ax, 1/2/mass, 1.5);
-
+    # xlims!(ax, 1, maxk)
+    # ylims!(ax, 1/16/mass, 1.5);
+    ylims!(ax, max(exp(-25), minimum(filter(isfinite, _ps))/2), 1)
     return ax
 end
 
@@ -43,7 +44,7 @@ function plotssds(ssds, params=nothing; cumulative=false)
         nbslices = length(ssds)
         fig = Figure(size=(1800, 600 * div(nbslices+1, 2)), fontsize=30);
         for (i, ((t, s), ssd)) in enumerate(ssds)
-            println("$i t=$(round(t, digits=4))  s=$(round(s, digits=4))")
+            println("$i t=$(round(t, digits=4))  s=$(round(s, digits=4))  maxk=$(maximum(getfield.(ssd, :k)))  K=$(_powerof2ceil(maximum(getfield.(ssd, :k))) + 1)")
             ax = Axis(fig[div(i-1, 2)+1, mod1(i, 2)], 
             title="subtree size distribution ($(round(t, digits=3)), $(round(s, digits=3)))", 
             xlabel="subtree size", ylabel="probability",

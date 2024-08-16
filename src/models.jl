@@ -36,43 +36,43 @@ function bdih!(du, u, p, t)
     return nothing
 end
 
-# function bdih_jac(u, p, t)
-#     b, d, rho, g, eta, alpha, beta = p
-#     J = 0
-#     if b > 0
-#         du += b * (u - 1) * u
-#     end
-#     if d > 0
-#         du += d * (1 - u)
-#     end
-#     if rho > 0
-#         du += rho * g * (u - 1) * u / (1 - g * u)
-#     end
-#     if eta > 0
-#         du += eta * alpha / (alpha + beta) * (u - 1) * u * _₂F₁(1, alpha + 1, alpha + beta + 1, u)
-#         # du += eta * alpha / (alpha + beta) * (u - 1) * u * hyp2f1a1(alpha + 1, alpha + beta + 1, u)
-#     end
-#     return du
-# end
+# Decomplexified ODE to use with stiff solvers
+function _bdih!(du, u, p, t)
+    b, d, rho, g, eta, alpha, beta = p
+    u = u[1] + 1.0im * u[2]
+    _du = 0.0im
+    if b > 0
+        _du += b * (u - 1) * u
+    end
+    if d > 0
+        _du += d * (1 - u)
+    end
+    if rho > 0
+        _du += rho * g * (u - 1) * u / (1 - g * u)
+    end
+    if eta > 0
+        _du += eta * alpha / (alpha + beta) * (u - 1) * u * _₂F₁(1, alpha + 1, alpha + beta + 1, u)
+        # du += eta * alpha / (alpha + beta) * (u - 1) * u * hyp2f1a1(alpha + 1, alpha + beta + 1, u)
+    end
+    du .= [real(_du), imag(_du)]
+    return nothing
+end
 
-const _bdihprob = ODEProblem(bdih, 0 + 0im, (0, 1))
+const _bdihprob = ODEProblem(bdih, 0.0im, (0.0, 1.0))
 
-const _bdihprob_inplace = ODEProblem(bdih!, 0 + 0im, (0, 1))
+# const _bdihprob_inplace = ODEProblem(bdih!, 0.0im, (0.0, 1.0))
+const _bdihprob_inplace = ODEProblem(_bdih!, [0.0, 0.0], (0.0, 1.0))
 
 function Ubdih(z, t, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace)::Complex
     if t == 0
         return z
     end
-    # sol = solve(prob, Tsit5(); 
-    #     u0=z, tspan=(0.0, t), 
-    #     p=[b, d, rho, g, eta, alpha, beta],
-    #     reltol=1e-8, abstol=1e-8)
-    # return sol.u[end]
-    sol = solve(prob, Tsit5(); 
-        u0=[z], tspan=(0.0, t), 
+    sol = solve(prob, AutoTsit5(Rodas5P()), 
+        u0=[real(z), imag(z)], tspan=(0.0, t), 
         p=[b, d, rho, g, eta, alpha, beta],
-        reltol=1e-8, abstol=1e-8)
-    return sol.u[end][1]
+        reltol=1e-6)
+        # abstol=1e-7)
+    return sol.u[end][1] + 1.0im * sol.u[end][2]
 end
 
 function Phi(y, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace)::Complex
@@ -92,10 +92,19 @@ end
 function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; gap=1/_powerof2ceil(truncN), optimizeradius=false)::Vector{Real}
     # Make sure the total number of state
     # is the closest power of two larger than n
-    
+
     n = _powerof2ceil(truncN)
 
-    if t < s || s < 0.0 || !(0 <= f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 <= g <= 1) || eta < 0 || alpha < 0 || beta < 0
+    # If the largest empirical k is too
+    # close to the next power of two, double n
+    # to avoid the numerical instabilities
+    # that sometimes appear in the tail of
+    # logphis
+    if truncN/n >= 0.75
+        n *= 2
+    end
+
+    if t < s || s < 0.0 || !(0 < f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 < g < 1) || eta < 0 || alpha <= 0 || beta <= 0
         return fill(-Inf, n)
     end
 
@@ -109,13 +118,8 @@ function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob
 
     # try
         Phi_samples = [Phi(z, t, s, f, b, d, rho, g, eta, alpha, beta, prob) for z in complex_halfcircle]
-        # Phi_samples = Phi.(complex_halfcircle, t, s, f, b, d, rho, g, eta, alpha, beta, Ref(prob))
         upks = irfft(conj(Phi_samples), n) # Hermitian FFT
-        # correct for 0
-        # upks .-= upks[1]
         log_pks = [upk > 0 ? log(upk) : -Inf for upk in upks] - (0:n-1) .* log(r)
-        # log_pks = log.(upks) - (0:n-1) .* log(r)
-
         return log_pks
     # catch e
         # return fill(-Inf, n)
@@ -125,7 +129,7 @@ end
 
 function slicelogprob(subtreesizedistribution, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace; maxsubtree=1000)
 
-    truncN = maximum(first.(subtreesizedistribution)) + 1
+    truncN = maximum(getfield.(subtreesizedistribution, :k)) + 1
 
     phiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, prob)[2:end]
 
@@ -158,80 +162,96 @@ end
 
 function log_jeffreys_betadist(a, b)
     d = (polygamma(1, a) - polygamma(1, a + b)) * (polygamma(1, b) - polygamma(1, a + b))
-    od = polygamma(1, a + b)^2
-    return 1/2 * log(d - od)
+    offd = polygamma(1, a + b)^2
+    return 1/2 * log(d - offd)
 end
 
 function logdensity(cgtree, p::ComponentArray; maxsubtree=Inf, prob=_bdihprob_inplace)
     lp = 0.0
     
     try
-        if 0.001 < p.f < 1.0
-            lp += logpdf(Truncated(Beta(0.5, 0.5), 0.001, 0.999), p.f)
+        if p.f < 1.0
+            # Jeffreys prior on Bernoulli
+            # sampling probability f
+            # π(p) = Beta(1/2, 1/2)
+            lp += logpdf(Truncated(Beta(0.5, 0.5), 0.01, 0.999), p.f)
+            # We reserve f = 1 for when the model does
+            # not include incomplete lineage sampling. 
+            # We truncate the prior at the lower end
+            # to avoid numerical instabilities.
+        elseif p.f < 0.01
+            return -Inf
         end
         
+        # Jeffreys prior on Poisson birth/death
+        # rates π(b) ∝ 1/sqrt(b) and π(d) ∝ 1/sqrt(d)
         if p.b > 0.0
             lp -= 1/2 * log(p.b)
+        elseif p.b < 0.0
+            return -Inf
         end
 
         if p.d > 0.0
             lp -= 1/2 * log(p.d)
+        elseif p.d < 0.0
+            return -Inf
         end
         
         if p.i.rho > 0.0
-            lp -= 1/2 * log(p.i.rho)
-            # lp += logpdf(Gamma(p.priors.b.alpha, p.priors.b.beta), p.b)
-            # lp += logpdf(Gamma(p.priors.d.alpha, p.priors.d.beta), p.d)
-            # lp += logpdf(Gamma(p.priors.i.rho.alpha, p.priors.i.rho.beta), p.i.rho)
-            # lp += logpdf(Truncated(Beta(p.priors.i.g.alpha, p.priors.i.g.beta), 0, 0.999), p.i.g)
-            lp -= 1/2 * log(p.i.g) + log(1 - p.i.g)
+            # Jeffreys prior on Poisson rate 1/sqrt(rho) (improper)
+            
+            # Innovation process burst size distribution
+            # is geometric P(k) = (1 - g)g^(k-1), k ≥ 1
+            # Jeffrets prior on geometric g (improper)
+            # given by π(g) ∝ 1/sqrt(g) * 1/(1-g)
+            if !(0.0 < p.i.g < 1.0)
+                return -Inf
+            else
+                lp -= 1/2 * log(p.i.rho)
+                lp -= 1/2 * log(p.i.g) + log(1 - p.i.g)
+            end
+        elseif p.i.rho < 0.0
+            return -Inf
         end
 
         if p.h.eta > 0.0
-            lp -= 1/2 * log(p.h.eta)
-            # lp += logpdf(Gamma(p.priors.h.eta.alpha, p.priors.h.eta.beta), p.h.eta)
-            # lp += logpdf(Gamma(p.priors.h.alpha.alpha, p.priors.h.alpha.beta), p.h.alpha)
-            # lp += logpdf(Gamma(p.priors.h.beta.alpha, p.priors.h.beta.beta), p.h.beta)
-            lp += log_jeffreys_betadist(p.h.alpha, p.h.beta)
+            if !(0.0 < p.h.alpha && 0.0 < p.h.beta)
+                return -Inf
+            else
+                # Jeffreys prior on Poisson rate η (improper)
+                lp -= 1/2 * log(p.h.eta)
+                lp += log_jeffreys_betadist(p.h.alpha, p.h.beta)
+            end
+            # Jeffreys prior on α, β of Beta(α, β) (proper)
+            # Could not find Jeffreys prior on full Beta-Geometric distribution
+        elseif p.h.eta < 0.0
+            return -Inf
         end
 
-        if lp > -Inf # Don't bother if we are out of range
+        if isfinite(lp) # Don't bother if we are out of range
             lp += cgtreelogprob(cgtree, p.f, p.b, p.d, p.i.rho, p.i.g, p.h.eta, p.h.alpha, p.h.beta, prob, maxsubtree=maxsubtree)
+        else
+            println("Out of prior support")
+            println(p)
         end
 
         return lp
-    catch _
+    catch e
+        println(e)
+        println("Log density failed")
+        println(p)
         return -Inf
     end
 
 end
 
+# By default this is a full fbdih model
 function initparams(;
-    f=0.999, b=1.0, d=1.0, rho=0.0, g=0.5, eta=0.0, alpha=5.0, beta=2.0,
-    # fpriora=0.5, fpriorb=0.5, # Bernoulli Jeffreys Beta(1/2, 1/2)
-    # bpriora=1.0, bpriorb=5.0,
-    # dpriora=1.0, dpriorb=5.0,
-    # rhopriora=1.0, rhopriorb=5.0,
-    # gpriora=0.5, gpriorb=0.01, # Approx Jeffreys Beta(1/2, 0)
-    # etapriora=1.0, etapriorb=5.0, 
-    # alphapriora=1.1, alphapriorb=4.0, 
-    # betapriora=1.1, betapriorb=4.0
+    f=0.999, b=1.0, d=1.0, rho=1.0, g=0.5, eta=1.0, alpha=5.0, beta=2.0,
     )
     return ComponentArray(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta))
 end
 
-
-_uv(e, a, b) = [e * a^b, a^2 - b * e^2]
-
-function _ea(u, v, b)
-    e0 = sqrt(sqrt(v^2 + 4 * u^2) - v) / sqrt(2)
-    a0 = sqrt(2) * u / sqrt(sqrt(v^2 + 4 * u^2) - v)
-    function f(ea)
-        if any(ea .<= 0)
-            return Inf
-        end
-        return abs(u - ea[1] * ea[2]^b)^2 + abs(v - ea[2]^2 + b * ea[1]^2)^2
-    end
-    optres = optimize(f, [e0, a0], NelderMead())
-    return optres.minimizer
-end
+_uvw(et, a, b) = [1/2 * log(et / a), sqrt(et * a), b / sqrt(et * a)]
+_eab(u, v, w) = [v * exp(u), v * exp(-u), v * w ]
+logjac_deabduvw(eta, alpha, beta) = log(2) + log(eta) + log(alpha)
