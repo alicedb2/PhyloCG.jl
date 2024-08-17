@@ -41,7 +41,7 @@ export AMWG, AM, LatentSlice, advance!
 
 include("chain.jl")
 export Chain, advance_chain!
-export chainsamples, bestsample, ess_rhat, burn!
+export chainsamples, bestsample, ess_rhat, burn!, burn
 
 include("plotting.jl")
 export plot, plotssd!, plotssd, plotssds

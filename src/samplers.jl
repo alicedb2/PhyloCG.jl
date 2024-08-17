@@ -197,7 +197,7 @@ function LatentSlice(model="fbd")
     )
 end
 
-function advance!(sampler::AMWG, cgtree)
+function advance!(sampler::AMWG, cgtree; maxsubtree=Inf)
     s = sampler
 
     if s.iter > s.batch_size
@@ -220,13 +220,18 @@ function advance!(sampler::AMWG, cgtree)
         else
             p_new[i] += exp(s.logscales[i]) * randn()
         end
-        logprob_new = logdensity(cgtree, p_new)
-        if logprob_new > -Inf
-            accprob = logprob_new - s.current_logprob
+        accprob = 0.0
+        if p_new.h.eta > 0.0
             accprob += logjac_deabduvw(p_new.h.eta, p_new.h.alpha, p_new.h.beta) - logjac_deabduvw(s.params.h.eta, s.params.h.alpha, s.params.h.beta)
+        end
+
+        logprob_new = logdensity(cgtree, p_new; maxsubtree=maxsubtree)
+        if logprob_new > -Inf
+            accprob += logprob_new - s.current_logprob
         else
             accprob = -Inf
         end
+
         if log(rand()) < accprob
             s.params .= p_new
             s.current_logprob = logprob_new
@@ -241,7 +246,7 @@ function advance!(sampler::AMWG, cgtree)
     return s
 end
 
-function advance!(sampler::AM, cgtree)
+function advance!(sampler::AM, cgtree; maxsubtree=Inf)
     s = sampler
     d = dims(sampler)
 
@@ -259,7 +264,7 @@ function advance!(sampler::AM, cgtree)
     p_new = deepcopy(s.params)
     p_new[s.mask] .+= rand(proposal_dist)
 
-    logprob_new = logdensity(cgtree, p_new)
+    logprob_new = logdensity(cgtree, p_new; maxsubtree=maxsubtree)
     accprob = logprob_new - s.current_logprob
     if log(rand()) < accprob
         s.params .= p_new
@@ -275,7 +280,7 @@ function advance!(sampler::AM, cgtree)
 
 end
 
-function advance!(sampler::LatentSlice, cgtree)
+function advance!(sampler::LatentSlice, cgtree; maxsubtree=Inf)
     s = sampler
 
     for i in shuffle!(findall(s.mask[:]))
@@ -289,7 +294,7 @@ function advance!(sampler::LatentSlice, cgtree)
 
         new_params = copy(s.params)
         new_params[i] = rand(Uniform(lbnd, ubnd))
-        logprob = logdensity(cgtree, new_params)
+        logprob = logdensity(cgtree, new_params, maxsubtree=maxsubtree)
         while log_w > logprob
             if new_params[i] < s.params[i]
                 lbnd = max(lbnd, new_params[i])
@@ -297,7 +302,7 @@ function advance!(sampler::LatentSlice, cgtree)
                 ubnd = min(ubnd, new_params[i])
             end
             new_params[i] = rand(Uniform(lbnd, ubnd))
-            logprob = logdensity(cgtree, new_params)
+            logprob = logdensity(cgtree, new_params, maxsubtree=maxsubtree)
         end
         s.params = new_params
         s.current_logprob = logprob
@@ -309,7 +314,7 @@ function advance!(sampler::LatentSlice, cgtree)
 
 end
 
-function _advance!(sampler::LatentSlice, cgtree)
+function _advance!(sampler::LatentSlice, cgtree, maxsubtree=Inf)
     s = sampler
     mask = s.mask
 
@@ -325,7 +330,7 @@ function _advance!(sampler::LatentSlice, cgtree)
 
     new_params = copy(s.params)
     new_params[mask] .= rand.(Uniform.(lbox, ubox))
-    logprob = logdensity(cgtree, new_params)
+    logprob = logdensity(cgtree, new_params, maxsubtree=maxsubtree)
     while log_w > logprob
         for i in dims(s)
             if new_params[mask][i] < s.params[mask][i]
@@ -336,7 +341,7 @@ function _advance!(sampler::LatentSlice, cgtree)
         end
         new_params[mask] .= rand.(Uniform.(lbox, ubox))
         println(new_params)
-        logprob = logdensity(cgtree, new_params)
+        logprob = logdensity(cgtree, new_params, maxsubtree=maxsubtree)
     end
 
     s.params = new_params

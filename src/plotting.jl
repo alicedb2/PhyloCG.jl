@@ -21,7 +21,7 @@ function plotssd!(ax, ssd, params=nothing; cumulative=false)
     end
 
     # xlims!(ax, 1, maxk)
-    # ylims!(ax, 1/16/mass, 1.5);
+    # ylims!(ax, 1/2/mass, 1.5);
     ylims!(ax, max(exp(-25), minimum(filter(isfinite, _ps))/2), 1)
     return ax
 end

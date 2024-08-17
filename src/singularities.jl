@@ -1,6 +1,6 @@
-b_pole(t, b)::Real = exp(b * t) / (exp(b * t) - 1)
+b_pole(t, b) = exp(b * t) / (exp(b * t) - 1)
 
-function bd_pole(t, b, d)::Real
+function bd_pole(t, b, d)
     if b == d
         return 1 + 1 / (b * t)
     else
@@ -8,12 +8,12 @@ function bd_pole(t, b, d)::Real
     end
 end
 
-function i_branchpoint(t, rho, g)::Real
+function i_branchpoint(t, rho, g)
     c = g^g*(1-g)^(1-g)*exp(-rho*g*t)
     return find_zero(z -> abs(z-1)^(1-g)/z - c, (1, 1/g), Bisection())
 end
 
-function di_branchpoint(t, d, rho, g)::Real
+function di_branchpoint(t, d, rho, g)
     c = (1/g-1)^(1-g)/(1/g-d/g/(rho+d))^(rho/(rho+d))
     c *= exp(-(rho*g - d*(1-g))*t)
     lower_bound = max(1, d/g/(rho+d))
@@ -24,7 +24,7 @@ function di_branchpoint(t, d, rho, g)::Real
     return find_zero(z -> fun(z) - c, (lower_bound, 1/g), Bisection())
 end
 
-function bi_branchpoint(t, b, rho, g)::Real
+function bi_branchpoint(t, b, rho, g)
     a0 = -(rho * g + b*(1 - g)) / (rho * g + b)
     a2 = rho * g^2 / (rho * g + b)
     b2 = (rho/b + 1/g)
@@ -36,14 +36,14 @@ function bi_branchpoint(t, b, rho, g)::Real
 end
 
 
-function _bdi_fun(z, p)::Real
+function _bdi_fun(z, p)
     c, a0, a1, a2, Δ1, Δ2 = p
     ret = abs(z - 1)^a0 * abs(z - Δ1)^a1 * abs(z - Δ2)^a2
     isfinite(ret) ? ret : Inf
     return ret - c
 end
 
-function bdi_branchpoint(t, b, d, rho, g)::Real
+function bdi_branchpoint(t, b, d, rho, g)
     A = 1 - g
     B = 1 - 1/g - rho/b
     Δ = sqrt((rho/b + 1/g + d/b)^2 - 4*d/b/g)
@@ -68,7 +68,7 @@ function bdi_branchpoint(t, b, d, rho, g)::Real
     return branchpoint
 end
 
-function bdih_singularity(t, b, d, rho, g, eta)::Real
+function bdih_singularity(t, b, d, rho, g, eta)
     if eta == 0
         if b > 0 && d == 0 && rho == 0
             # println("B model")
@@ -102,15 +102,15 @@ function bdih_singularity(t, b, d, rho, g, eta)::Real
     end
 end
 
-function bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace)
-    Usf = Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta, prob)
+function bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
+    Usf = Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta)
     return (bdih_singularity(t - s, b, d, rho, g, eta) - Usf) / (1 - Usf)
 end
 
-function _saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace)
+function _saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta)
     complex_step = 1e-13
-    function condition(r)::Float64
-        u = Phi(r + complex_step * im, t, s, f, b, d, rho, g, eta, alpha, beta, prob)
+    function condition(r::Float64)
+        u = Phi(r + complex_step * im, t, s, f, b, d, rho, g, eta, alpha, beta)
         Phir = real(u)
         dPhir = imag(u)/complex_step
         return dPhir/n - Phir/r
@@ -120,7 +120,7 @@ function _saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdi
     return condition
 end
 
-function bdihPhi_optimal_radius(n, t, s, f, b, d, rho, g, eta, alpha, beta, prob=_bdihprob_inplace)
-    max_radius = bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta, prob)
-    return find_zero(_saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta, prob), (0.0, max_radius), Bisection())
+function bdihPhi_optimal_radius(n, t, s, f, b, d, rho, g, eta, alpha, beta)
+    max_radius = bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
+    return find_zero(_saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta), (0.0, max_radius), Bisection())
 end

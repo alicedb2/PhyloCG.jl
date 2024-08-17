@@ -54,6 +54,10 @@ function burn!(chain, burn=0)
     return chain
 end
 
+function burn(chain, burn=0)
+    return burn!(deepcopy(chain), burn)
+end
+
 function advance_chain!(chain, n_iter)
     s = chain.sampler
 
