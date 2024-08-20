@@ -20,9 +20,9 @@ function plotssd!(ax, ssd, params=nothing; cumulative=false)
         stairs!(ax, 1:length(_ps), _ps, step=:center, color=Cycled(2), linewidth=7);
     end
 
-    # xlims!(ax, 1, maxk)
-    # ylims!(ax, 1/2/mass, 1.5);
-    ylims!(ax, max(exp(-25), minimum(filter(isfinite, _ps))/2), 1)
+    xlims!(ax, 1, maxk)
+    ylims!(ax, 1/2/mass, 1.5);
+    # ylims!(ax, max(exp(-25), minimum(filter(isfinite, _ps))/2), 1)
     return ax
 end
 
@@ -44,7 +44,7 @@ function plotssds(ssds, params=nothing; cumulative=false)
         nbslices = length(ssds)
         fig = Figure(size=(1800, 600 * div(nbslices+1, 2)), fontsize=30);
         for (i, ((t, s), ssd)) in enumerate(ssds)
-            println("$i t=$(round(t, digits=4))  s=$(round(s, digits=4))  maxk=$(maximum(getfield.(ssd, :k)))  K=$(_powerof2ceil(maximum(getfield.(ssd, :k))) + 1)")
+            println("$i t=$(round(t, digits=4))  s=$(round(s, digits=4))  maxk=$(maximum(getfield.(ssd, :k)))")
             ax = Axis(fig[div(i-1, 2)+1, mod1(i, 2)], 
             title="subtree size distribution ($(round(t, digits=3)), $(round(s, digits=3)))", 
             xlabel="subtree size", ylabel="probability",

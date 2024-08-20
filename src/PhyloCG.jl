@@ -9,7 +9,7 @@ using Distributions: Normal, Beta, Gamma, Truncated,
 using StatsBase
 using StatsFuns: logsumexp, logit, logistic
 using SpecialFunctions: loggamma, logabsgamma, polygamma
-using HypergeometricFunctions: _₂F₁
+using HypergeometricFunctions: _₂F₁, _₂F₁maclaurin
 using LinearAlgebra: diagind, diagm, I
 using FFTW: irfft
 using ComponentArrays: ComponentArray, labels
@@ -31,7 +31,7 @@ include("singularities.jl")
 export bdih_singularity, bdihPhi_singularity, bdihPhi_optimal_radius
 
 include("models.jl")
-export bdih, bdih!, Ubdih, Phi
+export bdih, bdih!, Ubdih, Phi, _Ubdih
 export logphis, slicelogprob, cgtreelogprob, logdensity
 export initparams
 export _ea, _uv, _uvw, _eab

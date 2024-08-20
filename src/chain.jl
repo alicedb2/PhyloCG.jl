@@ -58,14 +58,14 @@ function burn(chain, burn=0)
     return burn!(deepcopy(chain), burn)
 end
 
-function advance_chain!(chain, n_iter)
+function advance_chain!(chain, n_iter; maxsubtree=Inf)
     s = chain.sampler
 
     prog = Progress(n_iter, showspeed=true)
 
     for n in 1:n_iter
         isfile("stop") && break
-        advance!(chain.sampler, chain.cgtree)
+        advance!(chain.sampler, chain.cgtree, maxsubtree=maxsubtree)
         push!(chain.logprob_chain, s.current_logprob)
         push!(chain.params_chain, deepcopy(s.params))
         next!(prog, desc="$n")
