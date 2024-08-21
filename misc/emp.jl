@@ -5,17 +5,22 @@ using CairoMakie
 include("misc/loadsubtrees.jl")
 maxmax(t) = maximum(maximum.(map(kn -> getfield.(kn, :k), values(t))))
 
-# cgtree = data["envo__terrestrial_biome__shrubland_biome__subtropical_shrubland_biome"]
-# cgtree = data["envo__terrestrial_biome__desert_biome__polar_desert_biome"]
-cgtree = data["envo__terrestrial_biome__mangrove_biome"]
-cgtree = data["envo__aquatic_biome__marine_biome__marginal_sea_biome"]
-cgtree = data["envo__terrestrial_biome__shrubland_biome__tropical_shrubland_biome"]
-cgtree = data["envo__terrestrial_biome__grassland_biome__tropical_grassland_biome"]
-cgtree = data["envo__terrestrial_biome__anthropogenic_terrestrial_biome__village_biome"]
+# cgtree = data["envo__terrestrial_biome__shrubland_biome__subtropical_shrubland_biome"]; maxmax(cgtree)
+cgtree = data["envo__terrestrial_biome__desert_biome__polar_desert_biome"]; maxmax(cgtree)
+cgtree = data["envo__terrestrial_biome__mangrove_biome"]; maxmax(cgtree)
+cgtree = data["envo__aquatic_biome__marine_biome__marginal_sea_biome"]; maxmax(cgtree)
+cgtree = data["envo__terrestrial_biome__anthropogenic_terrestrial_biome__village_biome"]; maxmax(cgtree)
+cgtree = data["envo__terrestrial_biome__grassland_biome__tropical_grassland_biome"]; maxmax(cgtree)
+
+cgtree = data["envo__terrestrial_biome__shrubland_biome__tropical_shrubland_biome"]; maxmax(cgtree)
+
 sort(map(kv -> (kv[1] => maxmax(kv[2])), collect(data)))
 sort(map(kv -> (kv[1] => maxmax(kv[2])), collect(data)), by=x->x[2])
 
 chain = Chain(cgtree, AMWG("fbdh"))
+advance_chain!(chain, 50)
+advance_chain!(chain, 100)
+
 advance_chain!(chain, 5000)
 chain2 = Chain(cgtree, AMWG("fbdh"))
 advance_chain!(chain2, 5000)
@@ -124,3 +129,22 @@ _acc
 
 _pts = [Point2(_uv(e, a, beta)) for e in 1 .+ rand(100) for a in 1 .+ rand(100)]
 scatter(_pts)
+
+
+rs = LinRange(0.999:0.00001:1.001)
+phs = Phi.(rs, 0.25, 0.125, bestsample(chain2)...)
+lines(rs, real(phs) .- 1);
+lines!(rs, imag(phs));
+current_figure()
+
+function meanbdih(t, b, d, rho, g, eta, alpha, beta)
+    rate = b - d + rho / (1 - g) + eta * alpha / (alpha + beta)
+    # rate = b - d + rho * g / (1 - g) + eta * alpha / (beta - 1)
+    return exp(rate * t)
+end
+
+t, s = 0.9, 0.0
+b, d, rho, g, eta, alpha, beta = 0.5, 1.0, 0.9, 0.5, 0.3, 2.0, 1.5
+lphs = logphis(1024, t, s, 1.0, b, d, rho, g, eta, alpha, beta)
+sum((0:length(lphs)-1) .* exp.(lphs))
+meanbdih(t - s, b, d, rho, g, eta, alpha, beta)
