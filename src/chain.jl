@@ -3,11 +3,12 @@ mutable struct Chain
     cgtree::Dict{@NamedTuple{t::Float64, s::Float64}, Vector{@NamedTuple{k::Int64, n::Int64}}}
     params_chain::Vector{ComponentArray{Float64}}
     logprob_chain::Vector{Float64}
+    maxsubtree
 end
 
-function Chain(cgtree, sampler)
-    chain = Chain(sampler, cgtree, [], [])
-    chain.sampler.current_logprob = logdensity(cgtree, sampler.params)
+function Chain(cgtree, sampler; maxsubtree=Inf)
+    chain = Chain(sampler, cgtree, [], [], maxsubtree)
+    chain.sampler.current_logprob = logdensity(cgtree, sampler.params, maxsubtree=maxsubtree)
     return chain
 end
 
@@ -58,14 +59,14 @@ function burn(chain, burn=0)
     return burn!(deepcopy(chain), burn)
 end
 
-function advance_chain!(chain, n_iter; maxsubtree=Inf)
+function advance_chain!(chain, n_iter)
     s = chain.sampler
 
     prog = Progress(n_iter, showspeed=true)
 
     for n in 1:n_iter
         isfile("stop") && break
-        advance!(chain.sampler, chain.cgtree, maxsubtree=maxsubtree)
+        advance!(chain.sampler, chain.cgtree, maxsubtree=chain.maxsubtree)
         push!(chain.logprob_chain, s.current_logprob)
         push!(chain.params_chain, deepcopy(s.params))
         next!(prog, desc="$n")

@@ -7,7 +7,7 @@ using Distributions: Normal, Beta, Gamma, Truncated,
                      logpdf, MvNormal, MixtureModel, 
                      Exponential, Uniform
 using StatsBase
-using StatsFuns: logsumexp, logit, logistic
+using StatsFuns: logsumexp, logaddexp, logit, logistic, log1mexp
 using SpecialFunctions: loggamma, logabsgamma, polygamma
 using HypergeometricFunctions: _₂F₁, _₂F₁maclaurin
 using LinearAlgebra: diagind, diagm, I

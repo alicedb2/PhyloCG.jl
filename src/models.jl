@@ -1,80 +1,23 @@
-# function bdih(u, p, t)
-#     b, d, rho, g, eta, alpha, beta = p
-#     du = 0
-#     if b > 0
-#         du += b * (u - 1) * u
-#     end
-#     if d > 0
-#         du += d * (1 - u)
-#     end
-#     if rho > 0
-#         du += rho * g * (u - 1) * u / (1 - g * u)
-#     end
-#     if eta > 0
-#         du += eta * alpha / (alpha + beta) * (u - 1) * u * _₂F₁(1, alpha + 1, alpha + beta + 1, u)
-#         # du += eta * alpha / (alpha + beta) * (u - 1) * u * hyp2f1a1(alpha + 1, alpha + beta + 1, u)
-#     end
-#     return du
-# end
-
-# function bdih!(du, u, p, t)
-#     b, d, rho, g, eta, alpha, beta = p
-#     du[1] = 0
-#     if b > 0
-#         du[1] += b * (u[1] - 1) * u[1]
-#     end
-#     if d > 0
-#         du[1] += d * (1 - u[1])
-#     end
-#     if rho > 0
-#         du[1] += rho * g * (u[1] - 1) * u[1] / (1 - g * u[1])
-#     end
-#     if eta > 0
-#         du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * _₂F₁(1, alpha + 1, alpha + beta + 1, u[1])
-#         # du[1] += eta * alpha / (alpha + beta) * (u[1] - 1) * u[1] * hyp2f1a1(alpha + 1, alpha + beta + 1, u[1])
-#     end
-#     return nothing
-# end
-# Decomplexified ODE to use with stiff solvers
 function _bdih!(du, u, p, t)
-    # println(size(u), " ", size(du))
     b, d, rho, g, eta, alpha, beta = p
-    _u = u[1] + im * u[2]
-    du .= 0.0
+    u = u[1] + 1.0im * u[2]
+    _du = 0.0im
     if b > 0
-        du .+= reim(b * (_u - 1) * _u)
+        _du += b * (u - 1) * u
     end
     if d > 0
-        du .+= reim(d * (1 - _u))
+        _du += d * (1 - u)
     end
     if rho > 0
-        du .+= reim(rho * g * (_u - 1) * _u / (1 - g * _u))
+        _du += rho * g * (u - 1) * u / (1 - g * u)
     end
     if eta > 0
-        # du .+= reim(eta * alpha / (alpha + beta) * (_u - 1) * _u * hyp2f1a1(alpha + 1, alpha + beta + 1, _u))
-        du .+= reim(eta * alpha / (alpha + beta) * (_u - 1) * _u * _₂F₁(1, alpha + 1, alpha + beta + 1, _u))
+        _du += eta * alpha / (alpha + beta) * (u - 1) * u * _₂F₁(1, alpha + 1, alpha + beta + 1, u)
+        # du += eta * alpha / (alpha + beta) * (u - 1) * u * hyp2f1a1(alpha + 1, alpha + beta + 1, u)
     end
+    du .= [real(_du), imag(_du)]
     return nothing
 end
-
-# function _bdih!(du, u::AbstractMatrix, p, t)
-#     b, d, rho, g, eta, alpha, beta = p
-#     _u = u[1, :] + im * u[2, :]
-#     du .= 0.0
-#     if b > 0
-#         du .+= hcat(reim(b * (_u .- 1) .* _u)...)'
-#     end
-#     if d > 0
-#         du .+= hcat(reim(d * (1 .- _u))...)'
-#     end
-#     if rho > 0
-#         du .+= hcat(reim(rho * g * (_u .- 1) .* _u ./ (1 .- g * _u))...)'
-#     end
-#     if eta > 0
-#         du .+= hcat(reim(eta * alpha / (alpha + beta) * (_u .- 1) .* _u .* _₂F₁.(1, alpha + 1, alpha + beta + 1, _u))...)'
-#     end
-#     return nothing
-# end
 
 function _bdih_jac!(J, u, p, t)
     # println("in jac [J]=$(size(J)) [u]=$(size(u))")
@@ -100,102 +43,33 @@ function _bdih_jac!(J, u, p, t)
     return nothing
 end
 
-# function decomp_jac(f)
-#     return [real(f) -imag(f); imag(f) real(f)]
-# end
-
-# function _bdih_jac!(J::AbstractArray{T}, u::AbstractMatrix, p, t) where T
-#     println("in vec jac [J]=$(size(J)) [u]=$(size(u))")
-
-#     b, d, rho, g, eta, alpha, beta = p
-#     # _u = u[1, :] + 1.0im * u[2, :]
-#     # _J = fill(0.0im, size(u, 2))
-#     # if b > 0
-#     #     _J .+= b * (2 * _u .- 1)
-#     # end
-#     # if d > 0
-#     #     _J .+= -d
-#     # end
-#     # if rho > 0
-#     #     _J .+= rho * ((1 - g) ./ (1 .- g * _u).^2 .- 1)
-#     # end
-#     # if eta > 0
-#     #     _J .+= eta * alpha / (alpha + beta) * ((2 * _u .- 1) .* _₂F₁.(1, alpha + 1, alpha + beta + 1, _u) .+ (alpha + 1) / (alpha + beta + 1) * (_u .- 1) .* _u .* _₂F₁.(2, alpha + 2, alpha + beta + 2, _u))
-#     # end
-#     # J[1, 1, :] .= real(_J)
-#     # J[2, 2, :] .= real(_J)
-#     # J[1, 2, :] .= -imag(_J)
-#     # J[2, 1, :] .= imag(_J)
-#     fill!(J, zero(T))
-#     @inbounds for k in 1:size(u, 2)
-#         o = 2 * (k - 1)
-#         _u = u[1, k] + 1.0im * u[2, k]
-#         if b > 0
-#             J[o+1:o+2, o+1:o+2] .+= decomp_jac(b * (2 * _u .- 1))
-#         end
-#         if d > 0
-#             J[o+1:o+2, o+1:o+2] .+= decomp_jac(-d)
-#         end
-#         if rho > 0
-#             J[o+1:o+2, o+1:o+2] .+= decomp_jac(rho * ((1 - g) ./ (1 .- g * _u).^2 .- 1))
-#         end
-#         if eta > 0
-#             J[o+1:o+2, o+1:o+2] .+= decomp_jac(eta * alpha / (alpha + beta) * ((2 * _u .- 1) .* _₂F₁.(1, alpha + 1, alpha + beta + 1, _u) .+ (alpha + 1) / (alpha + beta + 1) * (_u .- 1) .* _u .* _₂F₁.(2, alpha + 2, alpha + beta + 2, _u)))
-#         end
-#     end
-#     return nothing
-# end
-
 const _bdih_fun = ODEFunction(_bdih!)
 const _bdih_prob_flat = ODEProblem(_bdih_fun, zeros(2), (0.0, 1.0))
-const _bdih_prob_vec = ODEProblem(_bdih_fun, zeros(2, 0), (0.0, 1.0))
 
 const _bdih_fun_wjac = ODEFunction(_bdih!, jac=_bdih_jac!)
 const _bdih_prob_flat_wjac = ODEProblem(_bdih_fun_wjac, zeros(2), (0.0, 1.0))
-const _bdih_prob_vec_wjac = ODEProblem(_bdih_fun_wjac, zeros(2, 0), (0.0, 1.0))
 
-
-# function Ubdih(z::AbstractVector, t::Real, b, d, rho, g, eta, alpha, beta)
-#     if t == 0
-#         return z
-#     end
-#     # fun = ODEFunction(_bdih!, jac=_bdih_jac!)
-#     # prob = ODEProblem(fun, zeros(2, 0), (0.0, t))
-#     # sol = solve(prob, AutoTsit5(Rodas5P()),  
-#     sol = solve(_bdih_prob_vec_wjac, AutoTsit5(Rodas5P()),  
-#         p=[b, d, rho, g, eta, alpha, beta],
-#         u0=hcat(real(z), imag(z))',
-#         reltol=1e-8)
-#     return sol.u[end][1, :] .+ im * sol.u[end][2, :]
-# end
-
-function Ubdih(z, t::Float64, b, d, rho, g, eta, alpha, beta)
-    if t == 0
+function Ubdih(z, t::Float64, b, d, rho, g, eta, alpha, beta)::ComplexF64
+    if t == 0.0
         return z
     end
     u, = Ubdih(z, [t], b, d, rho, g, eta, alpha, beta)
     return u
 end
 
-function Ubdih(z, t::Vector{Float64}, b, d, rho, g, eta, alpha, beta)
-    # prob = ODEProblem(_bdih!, [real(z), imag(z)], (0, maximum(t)))
+function Ubdih(z, ts::Vector{Float64}, b, d, rho, g, eta, alpha, beta)
     sol = solve(
         _bdih_prob_flat_wjac,
         AutoTsit5(Rodas5P()),
-        u0=[real(z), imag(z)], tspan=(0, maximum(t)), 
+        u0=[real(z), imag(z)], tspan=(0.0, maximum(ts)), 
         p=[b, d, rho, g, eta, alpha, beta],
-        saveat=t,
-        reltol=1e-8)
+        saveat=ts,
+        reltol=1e-6)
     return [x[1] + im * x[2] for x in sol.u]
 end
 
 function Phi(y, t, s, f, b, d, rho, g, eta, alpha, beta)
     @assert t >= s >= 0
-    # if y == 0.0im
-    #     return 0.0im
-    # end
-    # Ut1f = Ubdih(1 - f, t, b, d, rho, g, eta, alpha, beta)
-    # Us1f = Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta)
     Us1f, Ut1f = Ubdih(1 - f, [s, t], b, d, rho, g, eta, alpha, beta)
     return (Ubdih(Us1f .+ y .* (1 - Us1f), t - s, b, d, rho, g, eta, alpha, beta) .- Ut1f) ./ (1 - Ut1f)
 end
@@ -204,7 +78,8 @@ function _powerof2ceil(n)
     return 2^ceil(Int, log2(n))
 end
 
-function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/_powerof2ceil(truncN), optimizeradius=false)::Vector{Real}
+# function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/_powerof2ceil(truncN), optimizeradius=false)
+function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/2/truncN, optimizeradius=false)
     
     # # Make sure the total number of state
     # # is the closest power of two larger than n
@@ -218,32 +93,27 @@ function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/_powerof
     #     n *= 2
     # end
 
-    n = 2 * truncN
+    N = 2 * truncN
 
     if t < s || s < 0.0 || !(0 < f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 < g < 1) || eta < 0 || alpha <= 0 || beta <= 0
-        return fill(-Inf, n)
+        return fill(-Inf, N)
     end
 
     if optimizeradius
-        r = bdihPhi_optimal_radius(n, t, s, f, b, d, rho, g, eta, alpha, beta)
+        r = bdihPhi_optimal_radius(N, t, s, f, b, d, rho, g, eta, alpha, beta)
     else 
         r = bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta) - gap
     end
 
-    complex_halfcircle = r * exp.(2pi * im * (0:div(n, 2)) / n)
+    complex_halfcircle = r * exp.(2pi * im * (0:div(N, 2)) / N)
 
-    # try
-        # Phi_samples = [Phi(z, t, s, f, b, d, rho, g, eta, alpha, beta) for z in complex_halfcircle]
-        Us1f, Ut1f = Ubdih(1 - f, [s, t], b, d, rho, g, eta, alpha, beta)
-        Phi_samples = [(Ubdih(Us1f .+ z .* (1 - Us1f), t - s, b, d, rho, g, eta, alpha, beta) .- Ut1f) ./ (1 - Ut1f) for z in complex_halfcircle]
+    Us1f, Ut1f = Ubdih(1 - f, [s, t], b, d, rho, g, eta, alpha, beta)
+    Phi_samples = [(Ubdih(Us1f .+ z .* (1 - Us1f), t - s, b, d, rho, g, eta, alpha, beta) .- Ut1f) ./ (1 - Ut1f) for z in complex_halfcircle]
 
-        upks = irfft(conj(Phi_samples), n) # Hermitian FFT
-        log_pks = [upk > 0 ? log(upk) : -Inf for upk in upks] - (0:n-1) .* log(r)
-        return log_pks
-    # catch e
-        # return fill(-Inf, n)
-    # end
+    upks = irfft(conj(Phi_samples), N) # Hermitian FFT
+    log_pks = [upk > 0 ? log(upk) : -Inf for upk in upks] - (0:N-1) .* log(r)
 
+    return log_pks
 end
 
 function slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta; maxsubtree=Inf)
@@ -252,26 +122,26 @@ function slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta; maxsubtree=I
 
     truncN = maximum(getfield.(ssd, :k)) + 1
 
-    phiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta)[2:end]
+    _logphiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta)[2:end]
 
-    logprob = sum([n * phiks[k] for (k, n) in ssd])
+    logprob = sum([n * _logphiks[k] for (k, n) in ssd])
 
     return logprob
 end
 
 function cgtreelogprob(cgtree, f, b, d, rho, g, eta, alpha, beta; dropfirstslice=false, normalize=false, maxsubtree=Inf)
     logprob = 0.0
-    N = 0
+    nbsubtrees = 0
     for ((t, s), ssd) in cgtree
         if s == 0.0 && dropfirstslice
             continue
         end
-        N += sum(getfield.(ssd, :n))
+        nbsubtrees += sum(getfield.(ssd, :n))
         logprob += slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta, maxsubtree=maxsubtree)
     end
 
     if normalize
-        logprob /= N
+        logprob /= nbsubtrees
     end
 
     return logprob
@@ -316,7 +186,7 @@ end
 function logdensity(cgtree, p::ComponentArray; maxsubtree=Inf)
     lp = 0.0
 
-    # try
+    try
         # f = 1.0 signals the exclusion
         # of the sampling rate as a parameter
         # of the model
@@ -353,9 +223,9 @@ function logdensity(cgtree, p::ComponentArray; maxsubtree=Inf)
         end
 
         return lp
-    # catch e
-        # return -Inf
-    # end
+    catch e
+        return -Inf
+    end
 
 end
 

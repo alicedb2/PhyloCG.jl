@@ -103,24 +103,32 @@ function bdih_singularity(t, b, d, rho, g, eta)
 end
 
 function bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
-    Usf = Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta)
-    return (bdih_singularity(t - s, b, d, rho, g, eta) - Usf) / (1 - Usf)
+    Us1f = abs(Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta))
+    return (bdih_singularity(t - s, b, d, rho, g, eta) - Us1f) / (1 - Us1f)
 end
 
 function _saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta)
-    complex_step = 1e-13
-    function condition(r::Float64)
-        u = Phi(r + complex_step * im, t, s, f, b, d, rho, g, eta, alpha, beta)
+    complex_step = 2^-32
+    # complex_step = 2e-13
+    # Us1f = abs(Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta))
+    function condition(r)
+        u = Phi(r + complex_step * 1.0im, t, s, f, b, d, rho, g, eta, alpha, beta)
+        # u = Ubdih(Us1f + (r + complex_step * im) * (1 - Us1f), t - s, b, d, rho, g, eta, alpha, beta)
         Phir = real(u)
-        dPhir = imag(u)/complex_step
-        return dPhir/n - Phir/r
-        # return n/dPhir - r/Phir
-        # return dPhir/abs(Phir) - (n+1)/abs(r)
+        dPhidr = imag(u)/complex_step
+        ret = dPhidr / n - Phir / r
+        # ret = r * dPhidr - n * Phir
+        # ret = n/dPhidr - r/Phir
+        println("r=$r u=$u Phir/r=$(Phir/r) dPhidr/n=$(dPhidr/n) ret=$ret")
+        return ret
     end
     return condition
 end
 
 function bdihPhi_optimal_radius(n, t, s, f, b, d, rho, g, eta, alpha, beta)
     max_radius = bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
-    return find_zero(_saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta), (0.0, max_radius), Bisection())
+    println("\tmax_radius=$max_radius")
+    rstar = find_zero(_saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta), (max_radius, 2*max_radius), Bisection())
+    println("\t\trstar=$rstar")
+    return rstar
 end
