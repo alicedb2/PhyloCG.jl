@@ -1,4 +1,4 @@
-function plotssd!(ax, ssd, params=nothing; cumulative=false, maxsubtree=Inf)
+function plotssd!(ax, ssd, params=nothing; cumulative=false, modelN=Inf)
     (t, s), ssd = ssd
     mass = sum(getfield.(ssd, :n))
     ks = getfield.(ssd, :k)
@@ -12,10 +12,13 @@ function plotssd!(ax, ssd, params=nothing; cumulative=false, maxsubtree=Inf)
     barplot!(ax, ks, ps, fillto=1/2/mass, gap=0.0, alpha=0.4, width=1)
 
     if params !== nothing
-        if !isfinite(maxsubtree)
-            maxsubtree = 2 * (max_empirical_k + 1)
+        if !isfinite(modelN)
+            truncN = 2 * (max_empirical_k + 1)
+        else
+            truncN = 2 * modelN
         end
-        _logphis = logphis(maxsubtree, t, s, params...)[2:end];
+        _logphis = logphis(truncN, t, s, params...)[2:end];
+        # _logphis = logphis_exp(truncN, t, s, params...)[2:end];
         if cumulative
             _logcumulsumexp = reduce((x, y) -> vcat(x, logaddexp(x[end], y)), _logphis, init=[-Inf])
             _logphis = log1mexp.(_logcumulsumexp)
@@ -23,30 +26,31 @@ function plotssd!(ax, ssd, params=nothing; cumulative=false, maxsubtree=Inf)
             # _ps = reverse(cumsum(reåverse(_ps)))
         end
         _ps = exp.(_logphis)
-        stairs!(ax, 1:length(_ps), _ps, step=:center, color=Cycled(2), linewidth=7);
+        stairs!(ax, 1:length(_ps), _ps, step=:center, color=Cycled(2), linewidth=5);
         ylims!(ax, minimum(filter(x-> x > 0, _ps))/4, ℯ)
         # ylims!(ax, 1/2/mass, ℯ);
     else
         xlims!(ax, 1, 2 * max_empirical_k)
     end
-    # xlims!(ax, 30*maxsubtree, 32 * maxsubtree)
+    ylims!(ax, exp(-20), exp(1))
+    # xlims!(ax, 1, 2 * maxsubtree)
     
     return ax
 end
 
-function plotssd(ssd, params=nothing; cumulative=false, maxsubtree=Inf)
+function plotssd(ssd, params=nothing; cumulative=false, modelN=Inf)
     with_theme(theme_minimal()) do
         fig = Figure(size=(800, 600), fontsize=30);
         ax = Axis(fig[1, 1], 
         title="subtree size distribution ($(round(ssd[1][1], digits=3)), $(round(ssd[1][2], digits=3)))", 
         xlabel="subtree size", ylabel="probability",
         xscale=log2, yscale=log);
-        plotssd!(ax, ssd, params, cumulative=cumulative, maxsubtree=maxsubtree);
+        plotssd!(ax, ssd, params, cumulative=cumulative, modelN=modelN);
         return fig
     end
 end
 
-function plotssds(ssds, params=nothing; cumulative=false, maxsubtree=Inf)
+function plotssds(ssds, params=nothing; cumulative=false, modelN=Inf)
     with_theme(theme_minimal()) do
         ssds = sort(ssds, by=x->x[1])
         nbslices = length(ssds)
@@ -57,7 +61,7 @@ function plotssds(ssds, params=nothing; cumulative=false, maxsubtree=Inf)
             title="subtree size distribution ($(round(t, digits=3)), $(round(s, digits=3)))", 
             xlabel="subtree size", ylabel="probability",
             xscale=log2, yscale=log);
-            plotssd!(ax, ((t, s), ssd), params, cumulative=cumulative, maxsubtree=maxsubtree);
+            plotssd!(ax, ((t, s), ssd), params, cumulative=cumulative, modelN=modelN);
         end
         return fig
     end

@@ -102,8 +102,8 @@ function bdih_singularity(t, b, d, rho, g, eta)
     end
 end
 
-function bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
-    Us1f = abs(Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta))
+function Phi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
+    Us1f = real(Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta))
     return (bdih_singularity(t - s, b, d, rho, g, eta) - Us1f) / (1 - Us1f)
 end
 
@@ -125,8 +125,8 @@ function _saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta)
     return condition
 end
 
-function bdihPhi_optimal_radius(n, t, s, f, b, d, rho, g, eta, alpha, beta)
-    max_radius = bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
+function Phi_optimal_radius(n, t, s, f, b, d, rho, g, eta, alpha, beta)
+    max_radius = Phi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
     println("\tmax_radius=$max_radius")
     rstar = find_zero(_saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta), (max_radius, 2*max_radius), Bisection())
     println("\t\trstar=$rstar")

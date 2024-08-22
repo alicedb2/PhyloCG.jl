@@ -2,67 +2,6 @@ abstract type Sampler end
 
 dims(sampler::Sampler) = sum(sampler.mask)
 
-function setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool}, model::String="fbd")
-
-    if contains(model, "f")
-        mask.f = true
-        if params.f == 1.0
-            params.f = 0.999
-        end
-    else
-        mask.f = false
-        params.f = 1.0
-    end
-
-    if contains(model, "b")
-        mask.b = true
-        if params.b == 0.0
-            params.b = 1.0
-        end
-    else
-        mask.b = false
-        params.b = 0.0
-    end
-
-    if contains(model, "d")
-        mask.d = true
-        if params.d == 0.0
-            params.d = 1.0
-        end
-    else
-        mask.d = false
-        params.d = 0.0
-    end
-
-    if contains(model, "i")
-        mask.i .= true
-        if params.i.rho == 0.0
-            params.i.rho = 1.0
-            params.i.g = 0.5
-        end
-    else
-        mask.i .= false
-        params.i.rho = 0.0
-        params.i.g = 0.5
-    end
-
-    if contains(model, "h")
-        mask.h .= true
-        if params.h.eta == 0.0
-            params.h.eta = 1.0
-            params.h.alpha = 5.0
-            params.h.beta = 2.0
-        end
-    else
-        mask.h .= false
-        params.h.eta = 0.0
-        params.h.alpha = 5.0
-        params.h.beta = 2.0
-    end
-
-    return params, mask
-end
-
 function setmodel!(sampler::Sampler, model::String="fbd")
     setmodel!(sampler.params, sampler.mask, model)
     return sampler

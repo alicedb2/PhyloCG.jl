@@ -1,11 +1,13 @@
+# This representation will not work
+# if c is an integer away from b.
+
 function hyp2f1a1(b, c, z; maxiter=1000)
 
-    EPS = 2e-10
+    EPS = 1e-16
 
     if z == 0; return 1; end
     if z == 1; return (c - 1) / (c - b - 1); end
     if c == 1; return (1 - z)^-b; end
-    # imag(z) == 0 && real(z) > 1
 
     tn = 1
     rhon = 0
@@ -30,12 +32,16 @@ function hyp2f1a1(b, c, z; maxiter=1000)
         
         res, lres, llres = res + tn, res, lres
 
-        if (abs(tn) < EPS * abs(res)) || ((maxiter <= 0) && (n >= -maxiter))
+        if ((abs(tn) < EPS * abs(res)) 
+            || ((maxiter <= 0) && (n >= -maxiter))) 
+            # negative maxiter prevent switching to the analytically continued expression
+            # println("n=$n")
             return res
         elseif (maxiter > 0) && (n >= maxiter)
+            # println("maxiter reached")
             # If we hit maxiter and maxiter is positive, then switch to
             # the analytically continued expression with z->1-z
-            return continued_hyp2f1a1(b, c, z, maxiter=-maxiter)
+            return continued_hyp2f1a1(b, c, z, maxiter=maxiter)
         end
     end
 end
@@ -43,8 +49,7 @@ end
 
 function continued_hyp2f1a1(b, c, z; maxiter=1000)
 
-    logACF = log(hyp2f1a1(b, 2 + b - c, 1 - z, maxiter=maxiter))
-    
+    logACF = log(hyp2f1a1(b, 2 + b - c, 1 - z, maxiter=-maxiter))
     lgcb1, lgcb1sgn = logabsgamma(c - b - 1)
     lgc1, lgc1sgn = logabsgamma(c - 1)
     lgcb, lgcbsgn = logabsgamma(c - b)

@@ -42,7 +42,7 @@ function Lbdih(b, d, rho, g, eta, alpha, beta; truncN=1024, leaky=true)
     return L
 end
 
-function logphis_exp(truncN::Integer, t::Real, s::Real, f::Real=1, b::Real=0, d::Real=0, rho::Real=0, g::Real=0, eta::Real=0, alpha::Real=0, beta::Real=0; leaky=true)
+function logphis_exp(truncN, t, s, f, b, d, rho, g, eta, alpha, beta; leaky=true)
     L = Lbdih(b, d, rho, g, eta, alpha, beta, truncN=truncN, leaky=leaky)
     Ps = exp(s * L)[:, 2]
     Pt = exp(t * L)[:, 2]

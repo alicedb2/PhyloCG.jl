@@ -1,6 +1,6 @@
 function _bdih!(du, u, p, t)
     b, d, rho, g, eta, alpha, beta = p
-    u = u[1] + 1.0im * u[2]
+    u = u[1] + im * u[2]
     _du = 0.0im
     if b > 0
         _du += b * (u - 1) * u
@@ -12,13 +12,20 @@ function _bdih!(du, u, p, t)
         _du += rho * g * (u - 1) * u / (1 - g * u)
     end
     if eta > 0
-        _du += eta * alpha / (alpha + beta) * (u - 1) * u * _₂F₁(1, alpha + 1, alpha + beta + 1, u)
-        # du += eta * alpha / (alpha + beta) * (u - 1) * u * hyp2f1a1(alpha + 1, alpha + beta + 1, u)
+        # _₂F₁ is not stable at large alpha
+        # _du += eta * alpha / (alpha + beta) * (u - 1) * u * _₂F₁(1, alpha + 1, alpha + beta + 1, u)
+        _du += eta * alpha / (alpha + beta) * (u - 1) * u * hyp2f1a1(alpha + 1, alpha + beta + 1, u)
     end
     du .= [real(_du), imag(_du)]
     return nothing
 end
 
+# Abandoning the use of _₂F₁ for stability
+# and we don't have a stable implementation
+# for a = 2. We'd need to use one of Gauss'
+# contiguous relations to express d₂F₁(1, b, c; z)/dz
+# in terms of ₂F₁(1, b, c; z) and ₂F₁(1, b+1, c,; z)
+# instead of ₂F₁(2, b, c; z)
 function _bdih_jac!(J, u, p, t)
     # println("in jac [J]=$(size(J)) [u]=$(size(u))")
     b, d, rho, g, eta, alpha, beta = p
@@ -46,6 +53,8 @@ end
 const _bdih_fun = ODEFunction(_bdih!)
 const _bdih_prob_flat = ODEProblem(_bdih_fun, zeros(2), (0.0, 1.0))
 
+# Jacobian needs ₂F₁(2, b, c; z), for which we
+# don't have a stable implementation, do not use.
 const _bdih_fun_wjac = ODEFunction(_bdih!, jac=_bdih_jac!)
 const _bdih_prob_flat_wjac = ODEProblem(_bdih_fun_wjac, zeros(2), (0.0, 1.0))
 
@@ -58,57 +67,55 @@ function Ubdih(z, t::Float64, b, d, rho, g, eta, alpha, beta)::ComplexF64
 end
 
 function Ubdih(z, ts::Vector{Float64}, b, d, rho, g, eta, alpha, beta)
+    if isinteger(beta)
+        @warn "For numerical reasons beta cannot be an integer, adding a small perturbation"
+        beta += 1e-6
+    end
+
+    maxrate = maximum([b, d, rho, eta])
+
+    # Normalize rates and times
+    # Not always faster at a given tolerate
+    # b, d, rho, eta = [b, d, rho, eta] ./ maxrate
+    # ts = maxrate .* ts
+
     sol = solve(
-        _bdih_prob_flat_wjac,
+        _bdih_prob_flat,
         AutoTsit5(Rodas5P()),
         u0=[real(z), imag(z)], tspan=(0.0, maximum(ts)), 
         p=[b, d, rho, g, eta, alpha, beta],
         saveat=ts,
-        reltol=1e-6)
+        reltol=1e-13)
     return [x[1] + im * x[2] for x in sol.u]
 end
 
+# Phi is already vectorized so we can
+# avoid recomputing Us1f and Ut1f for
+# each y in the halfcircle passed
+# by logphis
 function Phi(y, t, s, f, b, d, rho, g, eta, alpha, beta)
     @assert t >= s >= 0
     Us1f, Ut1f = Ubdih(1 - f, [s, t], b, d, rho, g, eta, alpha, beta)
-    return (Ubdih(Us1f .+ y .* (1 - Us1f), t - s, b, d, rho, g, eta, alpha, beta) .- Ut1f) ./ (1 - Ut1f)
+    return (Ubdih.(Us1f .+ y .* (1 - Us1f), t - s, b, d, rho, g, eta, alpha, beta) .- Ut1f) ./ (1 - Ut1f)
 end
 
 function _powerof2ceil(n)
     return 2^ceil(Int, log2(n))
 end
 
-# function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/_powerof2ceil(truncN), optimizeradius=false)
-function logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/2/truncN, optimizeradius=false)
-    
-    # # Make sure the total number of state
-    # # is the closest power of two larger than n
-    # n = _powerof2ceil(truncN)
-    # # If the largest empirical k is too
-    # # close to the next power of two, double n
-    # # to avoid the numerical instabilities
-    # # that sometimes appear in the tail of
-    # # logphis
-    # if truncN/n >= 0.75
-    #     n *= 2
-    # end
-
-    N = 2 * truncN
-
+function logphis(N, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/N, optimizeradius=false)
     if t < s || s < 0.0 || !(0 < f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 < g < 1) || eta < 0 || alpha <= 0 || beta <= 0
         return fill(-Inf, N)
     end
 
     if optimizeradius
-        r = bdihPhi_optimal_radius(N, t, s, f, b, d, rho, g, eta, alpha, beta)
+        r = Phi_optimal_radius(N, t, s, f, b, d, rho, g, eta, alpha, beta)
     else 
-        r = bdihPhi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta) - gap
+        r = Phi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta) - gap
     end
 
     complex_halfcircle = r * exp.(2pi * im * (0:div(N, 2)) / N)
-
-    Us1f, Ut1f = Ubdih(1 - f, [s, t], b, d, rho, g, eta, alpha, beta)
-    Phi_samples = [(Ubdih(Us1f .+ z .* (1 - Us1f), t - s, b, d, rho, g, eta, alpha, beta) .- Ut1f) ./ (1 - Ut1f) for z in complex_halfcircle]
+    Phi_samples = Phi(complex_halfcircle, t, s, f, b, d, rho, g, eta, alpha, beta)
 
     upks = irfft(conj(Phi_samples), N) # Hermitian FFT
     log_pks = [upk > 0 ? log(upk) : -Inf for upk in upks] - (0:N-1) .* log(r)
@@ -120,9 +127,10 @@ function slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta; maxsubtree=I
 
     ssd = filter(st -> st.k <= maxsubtree, ssd)
 
-    truncN = maximum(getfield.(ssd, :k)) + 1
+    truncN = 2 * (maximum(getfield.(ssd, :k)) + 1)
+    gap = 1 / truncN
 
-    _logphiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta)[2:end]
+    _logphiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, gap=gap)[2:end]
 
     logprob = sum([n * _logphiks[k] for (k, n) in ssd])
 
@@ -183,38 +191,62 @@ function log_jeffreys_samplingrate(f; f_lower_bound=0.01)
     return logpdf(Truncated(Beta(0.5, 0.5), f_lower_bound, 1.0), f)
 end
 
+# Change of variable 
+# (eta, alpha, beta) -> (u, v, w)
+# to remove the strong correlation between
+# eta and alpha. We also need to add a third 
+# variable w to the bunch because with the change
+# (eta, alpha, beta) -> (u, v, beta) 
+# v is then further strongly correlated with beta.
+_uvw(eta, alpha, beta) = [1/2 * log(eta / alpha), sqrt(eta * alpha), beta / sqrt(eta * alpha)]
+_eab(u, v, w) = [v * exp(u), v * exp(-u), v * w ]
+function logjac_deabduvw(eta, alpha, _beta)
+    try
+        return log(2) + log(eta) + log(alpha)
+    catch _
+        return -Inf
+    end
+end
+
+function log_priors(p::ComponentArray)
+    lp = 0.0
+    # f = 1.0 signals the exclusion
+    # of the sampling rate as a parameter
+    # of the model
+    if p.f < 1.0
+        lp += log_jeffreys_samplingrate(p.f)
+    end
+    
+    # Rates b, d, rho, eta = 0.0 signal
+    # the exclusion of the corresponding
+    # process in the model
+
+    if p.b != 0.0
+        lp += log_jeffreys_rate(p.b)
+    end
+
+    if p.d != 0.0
+        lp += log_jeffreys_rate(p.d)
+    end
+    
+    if p.i.rho != 0.0
+        lp += log_jeffreys_rate(p.i.rho)
+        lp += log_jeffreys_geom(p.i.g)
+    end
+    
+    if p.h.eta != 0.0
+        lp += log_jeffreys_rate(p.h.eta)
+        lp += log_jeffreys_betadist(p.h.alpha, p.h.beta)
+    end
+
+    return lp
+end
+
 function logdensity(cgtree, p::ComponentArray; maxsubtree=Inf)
     lp = 0.0
 
     try
-        # f = 1.0 signals the exclusion
-        # of the sampling rate as a parameter
-        # of the model
-        if p.f < 1.0
-            lp += log_jeffreys_samplingrate(p.f)
-        end
-        
-        # Rates b, d, rho, eta = 0.0 signal
-        # the exclusion of the corresponding
-        # process in the model
-
-        if p.b != 0.0
-            lp += log_jeffreys_rate(p.b)
-        end
-
-        if p.d != 0.0
-            lp += log_jeffreys_rate(p.d)
-        end
-        
-        if p.i.rho != 0.0
-            lp += log_jeffreys_rate(p.i.rho)
-            lp += log_jeffreys_geom(p.i.g)
-        end
-        
-        if p.h.eta != 0.0
-            lp += log_jeffreys_rate(p.h.eta)
-            lp += log_jeffreys_betadist(p.h.alpha, p.h.beta)
-        end
+        lp += log_priors(p)
 
         # Don't bother if one of the above
         # parameter was out of bounds
@@ -230,18 +262,72 @@ function logdensity(cgtree, p::ComponentArray; maxsubtree=Inf)
 end
 
 # By default this is a full fbdih model
+# Do not set beta to an integer value,
+# Our implementation of ₂F₁ is not defined there.
+# This is not a problem in general since the
+# probability the chain will hit an integer
+# is pretty virtually zero.
 function initparams(;
-    f=0.999, b=1.0, d=1.0, rho=1.0, g=0.5, eta=1.0, alpha=5.0, beta=2.0,
+    f=0.999, b=1.0, d=1.0, rho=1.0, g=0.5, eta=1.0, alpha=5.0, beta=2.1,
     )
+    if isinteger(beta)
+        @warn "For numerical reasons beta cannot be an integer, adding a small perturbation"
+        beta += 1e-6
+    end
     return ComponentArray(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta))
 end
 
-_uvw(eta, alpha, beta) = [1/2 * log(eta / alpha), sqrt(eta * alpha), beta / sqrt(eta * alpha)]
-_eab(u, v, w) = [v * exp(u), v * exp(-u), v * w ]
-function logjac_deabduvw(eta, alpha, beta)
-    try
-        return log(2) + log(eta) + log(alpha)
-    catch _
-        return -Inf
+function setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool}, model::String="fbd")
+
+    if contains(model, "f")
+        mask.f = true
+        if params.f == 1.0
+            params.f = initparams().f
+        end
+    else
+        mask.f = false
+        params.f = 1.0
     end
+
+    if contains(model, "b")
+        mask.b = true
+        if params.b == 0.0
+            params.b = initparams().b
+        end
+    else
+        mask.b = false
+        params.b = 0.0
+    end
+
+    if contains(model, "d")
+        mask.d = true
+        if params.d == 0.0
+            params.d = initparams().d
+        end
+    else
+        mask.d = false
+        params.d = 0.0
+    end
+
+    if contains(model, "i")
+        mask.i .= true
+        if params.i.rho == 0.0
+            params.i .= initparams().i
+        end
+    else
+        mask.i .= false
+        params.i.rho = 0.0
+    end
+
+    if contains(model, "h")
+        mask.h .= true
+        if params.h.eta == 0.0
+            params.h .= initparams().h
+        end
+    else
+        mask.h .= false
+        params.h.eta = 0.0
+    end
+
+    return params, mask
 end
