@@ -49,7 +49,11 @@ end
 bestsample(chain::Chain, logprob=:density) = chain.params_chain[argmax(chain, logprob)]
 
 function ess_rhat(chain::Chain, syms...; burn=0)
-    return ess_rhat(chainsamples(chain, syms...; burn=burn))
+    if isempty(syms)
+        NamedTuple(ComponentArray(ess_rhat.(chainsamples.(Ref(chain), 1:length(chain.sampler.params), burn=burn)), getaxes(chain.sampler.params)))
+    else
+        return ess_rhat(chainsamples(chain, syms...; burn=burn))
+    end
 end
 
 function burn!(chain, burn=0)

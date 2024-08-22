@@ -72,7 +72,7 @@ function plot(chain; burn=0)
         nbparams = sum(chain.sampler.mask[:])
         fig = Figure(size=(1600, 400 * (1 + nbparams)), fontsize=30);
 
-        _labels = replace.(labels(chain.sampler.params), Ref("" => ""))
+        _labels = labels(chain.sampler.params)
 
         axtrace = Axis(fig[1, 1], title="log density", xlabel="iteration", ylabel="log density");
         _samples = chainsamples(chain, :logdensity, burn=burn)       
@@ -81,10 +81,10 @@ function plot(chain; burn=0)
         hist!(axmarginal, _samples, bins=50, color=Cycled(1), normalization=:pdf);
 
         for (i, k) in enumerate(findall(chain.sampler.mask[:]))
-            axtrace = Axis(fig[i+1, 1], title=_labels[k], xlabel="iteration", ylabel=last(split(_labels[k], ".")));
+            axtrace = Axis(fig[i+1, 1], xlabel="iteration", ylabel=_labels[k]);
             _samples = chainsamples(chain, k, burn=burn)       
             lines!(axtrace, _samples, color=Cycled(1), linewidth=2);
-            axmarginal = Axis(fig[i+1, 2], title=_labels[k], xlabel=last(split(_labels[k], ".")), ylabel="probability");
+            axmarginal = Axis(fig[i+1, 2], xlabel=_labels[k], ylabel="probability");
             hist!(axmarginal, _samples, bins=50, color=Cycled(1), normalization=:pdf);
         end
 

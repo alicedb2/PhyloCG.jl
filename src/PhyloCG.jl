@@ -12,7 +12,7 @@ using SpecialFunctions: loggamma, logabsgamma, polygamma
 using HypergeometricFunctions: _₂F₁, _₂F₁maclaurin
 using LinearAlgebra: diagind, diagm, I
 using FFTW: irfft
-using ComponentArrays: ComponentArray, labels
+using ComponentArrays: ComponentArray, labels, getaxes
 using ProgressMeter
 import MCMCDiagnosticTools: ess_rhat
 using Makie
