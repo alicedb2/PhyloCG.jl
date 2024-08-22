@@ -9,16 +9,16 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelN=Inf)
         # ps = 1 .- vcat(0, cumsum(ps))[1:end-1]
         ps = reverse(cumsum(reverse(ps)))
     end
-    barplot!(ax, ks, ps, fillto=1/2/mass, gap=0.0, alpha=0.4, width=1)
+
+    bpcolor = Makie.wong_colors()[5]
+    mcolor = Makie.wong_colors()[6]
 
     if params !== nothing
         if !isfinite(modelN)
-            truncN = 2 * max_empirical_k
-        else
-            truncN = 2 * modelN
+            modelN = max_empirical_k
         end
-        _logphis = logphis(truncN, t, s, params...);
-        # _logphis = logphis_exp(truncN, t, s, params...)[2:end];
+        truncN = 2 * modelN
+        _logphis = logphis(truncN, t, s, params...)[1:modelN];
         if cumulative
             _logcumulsumexp = reduce((x, y) -> vcat(x, logaddexp(x[end], y)), _logphis, init=[-Inf])
             _logphis = log1mexp.(_logcumulsumexp)
@@ -26,14 +26,18 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelN=Inf)
             # _ps = reverse(cumsum(reåverse(_ps)))
         end
         _ps = exp.(_logphis)
-        stairs!(ax, 1:length(_ps), _ps, step=:center, color=Cycled(2), linewidth=5);
+        lb = minimum(vcat(ps, _ps)/2)
+        barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=bpcolor, strokecolor=bpcolor);
+        stairs!(ax, 1:length(_ps), _ps, step=:center, color=mcolor, linewidth=5);
         # ylims!(ax, minimum(filter(x-> x > 0, _ps))/4, ℯ)
-        ylims!(ax, 1/2/mass, ℯ);
+        xlims!(ax, 1, max_empirical_k)
+        ylims!(ax, lb, exp(1))
     else
-        xlims!(ax, 1, 2 * max_empirical_k)
+        lb = minimum(ps)/2
+        barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=bpcolor, strokecolor=bpcolor);
+        ylims!(ax, lb, ℯ);
+        xlims!(ax, 1, max_empirical_k)
     end
-    # ylims!(ax, exp(-20), exp(1))
-    # xlims!(ax, 1, 2 * maxsubtree)
 
     return ax
 end
