@@ -39,7 +39,7 @@ end
 
 function adjustlogscales!(sampler::AMWG; clearrates=true)
     s = sampler
-    
+
     delta_n = min(s.min_delta, 1/sqrt(s.nb_batches))
 
     acc_rates = s.acc[s.mask] ./ (s.acc[s.mask] .+ s.rej[s.mask])
@@ -108,7 +108,7 @@ function LatentSlice(model="fbd")
     params = initparams()
     mask = similar(params, Bool)
     setmodel!(params, mask, model)
-    
+
     scales = fill!(similar(params), 1.0)
     # scales.f = 0.2
     # scales.i.g = 0.2
@@ -193,10 +193,10 @@ function advance!(sampler::AM, cgtree; maxsubtree=Inf)
         proposal_dist = MvNormal(s.safety_sigma^2 / d * I(d))
     else
         safety_component = MvNormal(s.safety_sigma^2 / d * I(d))
-        
+
         empirical_sigma = am_sigma(s.iter, s.empirical_x, s.empirical_xx)
         empirical_component = MvNormal(2.38^2 / d * empirical_sigma)
-        
+
         proposal_dist = MixtureModel([safety_component, empirical_component], [s.safety_beta, 1 - s.safety_beta])
     end
 
@@ -214,7 +214,7 @@ function advance!(sampler::AM, cgtree; maxsubtree=Inf)
     end
 
     s.iter += 1
-    
+
     return s
 
 end
@@ -227,7 +227,7 @@ function advance!(sampler::LatentSlice, cgtree; maxsubtree=Inf)
         l = rand(Uniform(s.params[i] - s.latent_s[i]/2, s.params[i] + s.latent_s[i]/2))
         latent_s = 2 * abs(l - s.params[i]) + rand(Exponential(s.scales[i]))
         s.latent_s[i] = latent_s
-        
+
         lbnd = max(s.lbnds[i], l - latent_s/2)
         ubnd = min(s.ubnds[i], l + latent_s/2)
 

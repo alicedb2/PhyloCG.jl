@@ -72,17 +72,16 @@ function Ubdih(z, ts::Vector{Float64}, b, d, rho, g, eta, alpha, beta)
         beta += 1e-6
     end
 
-    maxrate = maximum([b, d, rho, eta])
-
     # Normalize rates and times
     # Not always faster at a given tolerate
+    # maxrate = maximum([b, d, rho, eta])
     # b, d, rho, eta = [b, d, rho, eta] ./ maxrate
     # ts = maxrate .* ts
 
     sol = solve(
         _bdih_prob_flat,
         AutoTsit5(Rodas5P()),
-        u0=[real(z), imag(z)], tspan=(0.0, maximum(ts)), 
+        u0=[real(z), imag(z)], tspan=(0.0, maximum(ts)),
         p=[b, d, rho, g, eta, alpha, beta],
         saveat=ts,
         reltol=1e-13)
@@ -103,34 +102,54 @@ function _powerof2ceil(n)
     return 2^ceil(Int, log2(n))
 end
 
-function logphis(N, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/N, optimizeradius=false)
+function logphis(N, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/(N+1), optimizeradius=false)
+
+    N += 1
+
     if t < s || s < 0.0 || !(0 < f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 < g < 1) || eta < 0 || alpha <= 0 || beta <= 0
         return fill(-Inf, N)
     end
 
     if optimizeradius
+        # We recommend not to use optimizeradius
+        # and stick with the 1/N gap for now.
+        # There's something strange with
+        # xH models where the optimal radius
+        # appears to not lie on or within the
+        # unit circle, but the imaginary part
+        # is not 0 anymore beyond the unit circle.
+        # This is a problem with the current 
+        # implementation which uses the complex-step
+        # derivative to calculate dPhi(r)/dr.
         r = Phi_optimal_radius(N, t, s, f, b, d, rho, g, eta, alpha, beta)
-    else 
+    else
         r = Phi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta) - gap
     end
 
+    # We know the coefficients are probabilities
+    # and therefore positive real numbers, so
+    # we can safely use the Hermitian FFT.
+    # Hermitian FFT only requires N/2 + 1 samples
+    # in the upper half (including 0 and π) of the
+    # half-circle in the complex plane.
     complex_halfcircle = r * exp.(2pi * im * (0:div(N, 2)) / N)
     Phi_samples = Phi(complex_halfcircle, t, s, f, b, d, rho, g, eta, alpha, beta)
 
-    upks = irfft(conj(Phi_samples), N) # Hermitian FFT
+    # Hermitian FFT
+    upks = irfft(conj(Phi_samples), N)
     log_pks = [upk > 0 ? log(upk) : -Inf for upk in upks] - (0:N-1) .* log(r)
 
-    return log_pks
+    return log_pks[2:end]
 end
 
 function slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta; maxsubtree=Inf)
 
     ssd = filter(st -> st.k <= maxsubtree, ssd)
 
-    truncN = 2 * (maximum(getfield.(ssd, :k)) + 1)
+    truncN = 2 * maximum(getfield.(ssd, :k))
     gap = 1 / truncN
 
-    _logphiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, gap=gap)[2:end]
+    _logphiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, gap=gap)
 
     logprob = sum([n * _logphiks[k] for (k, n) in ssd])
 
@@ -191,12 +210,12 @@ function log_jeffreys_samplingrate(f; f_lower_bound=0.01)
     return logpdf(Truncated(Beta(0.5, 0.5), f_lower_bound, 1.0), f)
 end
 
-# Change of variable 
+# Change of variable
 # (eta, alpha, beta) -> (u, v, w)
 # to remove the strong correlation between
-# eta and alpha. We also need to add a third 
+# eta and alpha. We also need to add a third
 # variable w to the bunch because with the change
-# (eta, alpha, beta) -> (u, v, beta) 
+# (eta, alpha, beta) -> (u, v, beta)
 # v is then further strongly correlated with beta.
 _uvw(eta, alpha, beta) = [1/2 * log(eta / alpha), sqrt(eta * alpha), beta / sqrt(eta * alpha)]
 _eab(u, v, w) = [v * exp(u), v * exp(-u), v * w ]
@@ -216,7 +235,7 @@ function log_priors(p::ComponentArray)
     if p.f < 1.0
         lp += log_jeffreys_samplingrate(p.f)
     end
-    
+
     # Rates b, d, rho, eta = 0.0 signal
     # the exclusion of the corresponding
     # process in the model
@@ -228,12 +247,12 @@ function log_priors(p::ComponentArray)
     if p.d != 0.0
         lp += log_jeffreys_rate(p.d)
     end
-    
+
     if p.i.rho != 0.0
         lp += log_jeffreys_rate(p.i.rho)
         lp += log_jeffreys_geom(p.i.g)
     end
-    
+
     if p.h.eta != 0.0
         lp += log_jeffreys_rate(p.h.eta)
         lp += log_jeffreys_betadist(p.h.alpha, p.h.beta)

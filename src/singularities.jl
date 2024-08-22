@@ -102,6 +102,10 @@ function bdih_singularity(t, b, d, rho, g, eta)
     end
 end
 
+# Phi(y, t, s) = (U[U(1-f, s) + y(1 - U(1-f, s)), t-s] - U(1-f, t)) / (1 - U(1-f, t))
+# If there's a singularity in U(z, t-s) at z=R then there's a singularity
+# Phi(y, t, s) at y=Y such that R = U(1-f, s) + Y(1 - U(1-f, s))
+# We seek an optimal radius Y* within the radius of convergence y < Y.
 function Phi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
     Us1f = real(Ubdih(1 - f, s, b, d, rho, g, eta, alpha, beta))
     return (bdih_singularity(t - s, b, d, rho, g, eta) - Us1f) / (1 - Us1f)
@@ -119,16 +123,20 @@ function _saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta)
         ret = dPhidr / n - Phir / r
         # ret = r * dPhidr - n * Phir
         # ret = n/dPhidr - r/Phir
-        println("r=$r u=$u Phir/r=$(Phir/r) dPhidr/n=$(dPhidr/n) ret=$ret")
+        # println("r=$r u=$u Phir/r=$(Phir/r) dPhidr/n=$(dPhidr/n) ret=$ret")
         return ret
     end
     return condition
 end
 
-function Phi_optimal_radius(n, t, s, f, b, d, rho, g, eta, alpha, beta)
+# There's something strange happening with
+# xH models. See note in models.jl logphis()
+# for further details.
+function Phi_optimal_radius(N, t, s, f, b, d, rho, g, eta, alpha, beta)
     max_radius = Phi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta)
     println("\tmax_radius=$max_radius")
-    rstar = find_zero(_saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta), (max_radius, 2*max_radius), Bisection())
+    rstar = find_zero(_saddlepoint_cond(N, t, s, f, b, d, rho, g, eta, alpha, beta), (0.0, max_radius), Bisection())
+    # rstar = find_zero(_saddlepoint_cond(N, t, s, f, b, d, rho, g, eta, alpha, beta), (max_radius, 2*max_radius), Bisection())
     println("\t\trstar=$rstar")
     return rstar
 end

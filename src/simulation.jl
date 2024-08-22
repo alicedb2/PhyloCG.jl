@@ -12,7 +12,7 @@ function advance_gillespie_bdi(tk::Pop, b, d, rho, g; max_age=1.0, max_size=1000
     rates = [b * k, d * k, rho * k]
     total_rate = sum(rates)
     r1 = rand()
-    delta_age = -log(r1)/total_rate 
+    delta_age = -log(r1)/total_rate
     if t + delta_age >= max_age
         return Pop(max_age, k)
     end

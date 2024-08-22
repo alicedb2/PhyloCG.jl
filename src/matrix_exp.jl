@@ -65,7 +65,7 @@ function logphis_exp(truncN, t, s, f, b, d, rho, g, eta, alpha, beta; leaky=true
 
     uncond_logphis = logsumexp(uncond_logphis, dims=2)
     # println(uncond_logphis)
-    uncond_logphis .+= (0:truncN-1) * log_survival_prob_s 
+    uncond_logphis .+= (0:truncN-1) * log_survival_prob_s
 
     cond_logphis = uncond_logphis .- log_survival_prob_t
     cond_logphis[1] = -Inf

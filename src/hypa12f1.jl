@@ -11,14 +11,14 @@ function hyp2f1a1(b, c, z; maxiter=1000)
 
     tn = 1
     rhon = 0
-    
+
     n = 1
 
     res, lres, llres = tn, 0, 0
 
     while true
         n += 1
-        
+
         if mod(n, 2) == 1 # Odd n
             k = (n - 1)/2
             an = k * (c - 1 - b + k) * z / (c + n - 3) / (c + n - 2)
@@ -29,11 +29,11 @@ function hyp2f1a1(b, c, z; maxiter=1000)
 
         rhon = an * (1 + rhon) / (1 - an * (1 + rhon))
         tn = rhon * tn
-        
+
         res, lres, llres = res + tn, res, lres
 
-        if ((abs(tn) < EPS * abs(res)) 
-            || ((maxiter <= 0) && (n >= -maxiter))) 
+        if ((abs(tn) < EPS * abs(res))
+            || ((maxiter <= 0) && (n >= -maxiter)))
             # negative maxiter prevent switching to the analytically continued expression
             # println("n=$n")
             return res
@@ -58,7 +58,7 @@ function continued_hyp2f1a1(b, c, z; maxiter=1000)
     s1 = lgcb1sgn * lgc1sgn * lgcbsgn
     # logf1 = logACF + loggamma(c - b - 1.0) - loggamma(c - 1.0) - loggamma(c - b)
     # s1 = gammasgn(c - b - 1.0) * gammasgn(c - 1.0) * gammasgn(c - b)
-    
+
     lg1bc, lg1bcsgn = logabsgamma(1 + b - c)
     lgb, lgbsgn = logabsgamma(b)
 

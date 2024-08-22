@@ -20,7 +20,7 @@ function chainsamples(chain::Chain, syms...; burn=0)
     else
         slice = 1:length(chain.logprob_chain)
     end
-    
+
     if first(syms) isa Int
         return [p[first(syms)] for p in chain.params_chain[slice]]
     else
@@ -34,19 +34,19 @@ end
 
 Base.length(chain::Chain) = length(chain.logprob_chain)
 
-function Base.argmax(chain::Chain, logprob=:logdensity)
-    if logprob === :density
+function Base.argmax(chain::Chain, logprob=:map)
+    if logprob === :map
         return argmax(chain.logprob_chain)
-    elseif logprob === :likelihood
+    elseif logprob === :mle
         return argmax(chain.logprob_chain .- log_priors.(chain.params_chain))
     elseif logprob === :prior
         return argmax(log_priors.(chain.params_chain))
     else
-        throw(ArgumentError("logprob must be :logdensity or :loglikelihood"))
+        throw(ArgumentError("logprob must be :map, :mle, or :prior"))
     end
 end
 
-bestsample(chain::Chain, logprob=:density) = chain.params_chain[argmax(chain, logprob)]
+bestsample(chain::Chain, logprob=:map) = chain.params_chain[argmax(chain, logprob)]
 
 function ess_rhat(chain::Chain, syms...; burn=0)
     if isempty(syms)

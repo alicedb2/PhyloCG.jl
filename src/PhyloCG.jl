@@ -3,8 +3,8 @@ using Roots: find_zero, Bisection
 using Optim: optimize, NelderMead
 using DifferentialEquations
 using Random
-using Distributions: Normal, Beta, Gamma, Truncated, 
-                     logpdf, MvNormal, MixtureModel, 
+using Distributions: Normal, Beta, Gamma, Truncated,
+                     logpdf, MvNormal, MixtureModel,
                      Exponential, Uniform
 using StatsBase
 using StatsFuns: logsumexp, logaddexp, logit, logistic, log1mexp
