@@ -80,7 +80,8 @@ function Ubdih(z, ts::Vector{Float64}, b, d, rho, g, eta, alpha, beta)
 
     sol = solve(
         _bdih_prob_flat,
-        AutoTsit5(Rodas5P()),
+        # Vern9(),
+        AutoTsit5(AutoVern9(Rodas5P())), # sure, why not
         u0=[real(z), imag(z)], tspan=(0.0, maximum(ts)),
         p=[b, d, rho, g, eta, alpha, beta],
         saveat=ts,
@@ -130,8 +131,9 @@ function logphis(N, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/(N+1), optimi
     # and therefore positive real numbers, so
     # we can safely use the Hermitian FFT.
     # Hermitian FFT only requires N/2 + 1 samples
-    # in the upper half (including 0 and π) of the
-    # half-circle in the complex plane.
+    # in the upper half of the the complex
+    # half-circle (including 0 and π) to recover
+    # all N coefficients.
     complex_halfcircle = r * exp.(2pi * im * (0:div(N, 2)) / N)
     Phi_samples = Phi(complex_halfcircle, t, s, f, b, d, rho, g, eta, alpha, beta)
 
@@ -188,7 +190,11 @@ end
 # numerical instability and to make the prior proper
 function log_jeffreys_rate(r; rate_upper_bound=50.0)
     if 0.0 < r <= rate_upper_bound
-        return -1/2 * log(r) - log(2) - 1/2 * log(rate_upper_bound)
+        lp = -1/2 * log(r)
+        if isfinite(rate_upper_bound)
+            lp += -log(2) - 1/2 * log(rate_upper_bound)
+        end
+        return lp
     else
         return -Inf
     end

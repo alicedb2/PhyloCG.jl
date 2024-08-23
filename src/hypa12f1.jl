@@ -1,7 +1,7 @@
 # This representation will not work
 # if c is an integer away from b.
 
-function hyp2f1a1(b, c, z; maxiter=1000)
+function hyp2f1a1(b, c, z; maxiter=1_000)
 
     EPS = 1e-16
 
@@ -47,7 +47,7 @@ function hyp2f1a1(b, c, z; maxiter=1000)
 end
 
 
-function continued_hyp2f1a1(b, c, z; maxiter=1000)
+function continued_hyp2f1a1(b, c, z; maxiter=1_000)
 
     logACF = log(hyp2f1a1(b, 2 + b - c, 1 - z, maxiter=-maxiter))
     lgcb1, lgcb1sgn = logabsgamma(c - b - 1)
