@@ -3,7 +3,6 @@ using PhyloCG
 using CairoMakie
 
 include("misc/loadsubtrees.jl")
-maxmax(t) = maximum(maximum.(map(kn -> getfield.(kn, :k), values(t))))
 
 # cgtree = data["envo__terrestrial_biome__shrubland_biome__subtropical_shrubland_biome"]; maxmax(cgtree)
 cgtree = data["envo__terrestrial_biome__desert_biome__polar_desert_biome"]; maxmax(cgtree)
@@ -138,13 +137,75 @@ lines!(rs, imag(phs));
 current_figure()
 
 function meanbdih(t, b, d, rho, g, eta, alpha, beta)
-    rate = b - d + rho / (1 - g) + eta * alpha / (alpha + beta)
-    # rate = b - d + rho * g / (1 - g) + eta * alpha / (beta - 1)
+    # rate = b - d + rho / (1 - g) + eta * alpha / (alpha + beta)
+    rate = b - d + rho * g / (1 - g) + eta * alpha / (beta - 1)
     return exp(rate * t)
 end
 
 t, s = 0.9, 0.0
-b, d, rho, g, eta, alpha, beta = 0.5, 1.0, 0.9, 0.5, 0.3, 2.0, 1.5
+b, d, rho, g, eta, alpha, beta = 0.5, 0.0, 0.0, 0.5, 0.0, 2.0, 1.5
 lphs = logphis(1024, t, s, 1.0, b, d, rho, g, eta, alpha, beta)
 sum((0:length(lphs)-1) .* exp.(lphs))
 meanbdih(t - s, b, d, rho, g, eta, alpha, beta)
+
+
+N = 128
+f(x) = 1 ./ (1 .- x) .- 1
+rs = 0.0001:0.0001:0.9999
+foo = []
+for r in rs
+    cc = r * exp.(2pi * im * (0:div(N, 2)) / N)
+    s = f(cc)
+    coeffs = irfft(conj(s), N)
+    push!(foo, log(mean(abs.(vcat(s, s[2:end-1])))) - log(abs(last(coeffs) - (N-1)*log(r))) - (N-1) * log(r))
+end
+kappa, idx = findmin(abs.(foo)); r = rs[idx]
+r = 0.99;
+r = 1 - 1/N
+# cc = r * exp.(2pi * im * (0:div(N, 2)) / N);
+cc = r * exp.(2pi * im * (1:N) / N);
+s = f.(cc);
+s[end] = abs(s[end]);
+# coeffs = irfft(conj(s), N);
+coeffs = ifft(reverse(s))
+coeffs = abs.(coeffs)
+a = [c > 0 ? log(c) : -Inf for c in coeffs] .- (0:N-1) .* log(r)
+a .- a[1]
+
+foo = copy(empo.sampler.params)
+foo.i.rho = 0.0
+plotssds(empo.cgtree, foo, maxsubtree=4000)
+
+
+
+
+problematic = ComponentVector{Float64}(f = 0.9987439882710604, b = 0.005685406623455595, d = 0.0022785453482634128, i = (rho = 0.09356531091384332, g = 0.5654596214606173), h = (eta = 0.0674255835353483, alpha = 23.710672150516874, beta = 1.0341308074309457))
+fig = Figure();
+ax = Axis(fig[1, 1])
+N = 16_000
+gap = 1/N
+lps = logphis(N, 0.9, 0.5, empo.sampler.params..., gap=gap)
+# @time lps = logphis(N, 0.9, 0.5, 1.0, 0.5, 1.0, 0.9, 0.5, 0.5, 2.0, 1.5, gap=gap)
+# lps = logphis(N, 0.9, 0.5, problematic..., gap=gap)
+replace!(lps, -Inf => NaN)
+ks = 1:length(lps)
+lines!(ax, log2.(ks), lps)
+# xlims!(ax, log2(N)-1.1, log2(N)+0.1)
+# ylims!(ax, lps[N-256]-2, lps[N-256]+5)
+fig
+
+
+t = 0.5
+eta, alpha, beta = 0.1, 2.1, 1.5
+zs = collect(LinRange(0.9, 1.1, 100)) .+ 1e-13im
+us = Ubdih.(zs, t, 0.0, 0.0, 0.0, 0.0, eta, alpha, beta)
+u1 = Ubdih(1.0, t, 0.0, 0.0, 0.0, 0.0, eta, alpha, beta)
+func(z, eta, alpha, beta) = (eta * alpha / (beta - 1) * (z - 1) - eta * pi * exp(loggamma(alpha + beta) - loggamma(alpha) - loggamma(beta)) * csc(pi * beta) * (1 - z)^beta)
+
+fig = Figure();
+ax = Axis(fig[1, 1])
+lines!(ax, real(zs), real.(us) .- real(u1))
+lines!(ax, real(zs), imag.(us))
+lines!(ax, real(zs), real(func.(zs, eta, alpha, beta)))
+lines!(ax, real(zs), imag(func.(zs, eta, alpha, beta)))
+fig
