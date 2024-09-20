@@ -1,10 +1,14 @@
 function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf)
     (t, s), ssd = slice
-    mass = sum(values(ssd))
-    ks = collect(keys(ssd))
+
+    sidx = sortperm(collect(keys(ssd)))
+    ks = collect(keys(ssd))[sidx]
+    ns = collect(values(ssd))[sidx]
+
+    mass = sum(ns)
     max_empirical_k = maximum(ks)
 
-    ps = exp.(log.(values(ssd)) .- log(mass))
+    ps = exp.(log.(ns) .- log(mass))
     if cumulative
         # ps = 1 .- vcat(0, cumsum(ps))[1:end-1]
         ps = reverse(cumsum(reverse(ps)))
