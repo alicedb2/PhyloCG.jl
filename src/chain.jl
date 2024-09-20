@@ -1,9 +1,9 @@
 mutable struct Chain
     sampler::Sampler
-    cgtree::Dict{@NamedTuple{t::Float64, s::Float64}, Vector{@NamedTuple{k::Int64, n::Int64}}}
+    cgtree::Dict{@NamedTuple{t::Float64, s::Float64}, DefaultDict{Int, Int, Int}}
     params_chain::Vector{ComponentArray{Float64}}
     logprob_chain::Vector{Float64}
-    maxsubtree
+    maxsubtree::Real
 end
 
 function Chain(cgtree, sampler; maxsubtree=Inf)
