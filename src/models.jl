@@ -20,6 +20,12 @@ function _bdih!(du, u, p, t)
     return nothing
 end
 
+function _bdih(u, p, t)
+    ret = similar(u)
+    _bdih!(ret, u, p, t)
+    return ret
+end
+
 # Abandoning the use of _₂F₁ for stability
 # and we don't have a stable implementation
 # for a = 2. We'd need to use one of Gauss'
@@ -97,6 +103,16 @@ function Phi(y, t, s, f, b, d, rho, g, eta, alpha, beta)
     @assert t >= s >= 0
     Us1f, Ut1f = Ubdih(1 - f, [s, t], b, d, rho, g, eta, alpha, beta)
     return (Ubdih.(Us1f .+ y .* (1 - Us1f), t - s, b, d, rho, g, eta, alpha, beta) .- Ut1f) ./ (1 - Ut1f)
+end
+
+function dPhi(y, t, s, f, b, d, rho, g, eta, alpha, beta)
+    @assert t >= s >= 0
+    Us1f, Ut1f = Ubdih(1 - f, [s, t], b, d, rho, g, eta, alpha, beta)
+    z = Us1f + y * (1 - Us1f)
+    Utsz = Ubdih(z, t - s, b, d, rho, g, eta, alpha, beta)
+    num = ComplexF64(_bdih([real(Utsz), imag(Utsz)], [b, d, rho, g, eta, alpha, beta], 0.0)...)
+    denum = ComplexF64(_bdih([real(z), imag(z)], [b, d, rho, g, eta, alpha, beta], 0.0)...)
+    return num * (1 - Us1f)  / denum / (1 - Ut1f)
 end
 
 function _powerof2ceil(n)

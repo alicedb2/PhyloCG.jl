@@ -129,6 +129,21 @@ function _saddlepoint_cond(n, t, s, f, b, d, rho, g, eta, alpha, beta)
     return condition
 end
 
+function _saddlepoint_cond2(n, t, s, f, b, d, rho, g, eta, alpha, beta)
+    Us1f, Ut1f = Ubdih(1 - f, [s, t], b, d, rho, g, eta, alpha, beta)
+    function condition(r)
+        z = Us1f + r * (1 - Us1f)
+        Utsz = Ubdih(z, t - s, b, d, rho, g, eta, alpha, beta)
+        num = ComplexF64(_bdih([real(Utsz), imag(Utsz)], [b, d, rho, g, eta, alpha, beta], 0.0)...)
+        denum = ComplexF64(_bdih([real(z), imag(z)], [b, d, rho, g, eta, alpha, beta], 0.0)...)
+        dPhidr = num * (1 - Us1f)  / denum / (1 - Ut1f)
+        Phir = (Utsz - Ut1f) / (1 - Ut1f)
+        ret = dPhidr / n - Phir / r
+        return ret
+    end
+    return condition
+end
+
 # There's something strange happening with
 # xH models. See note in models.jl logphis()
 # for further details.

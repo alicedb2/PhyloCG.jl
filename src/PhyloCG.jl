@@ -34,9 +34,10 @@ export advance_gillespie_bdi, Pop
 
 include("singularities.jl")
 export bdih_singularity, bdihPhi_singularity, bdihPhi_optimal_radius
+export _saddlepoint_cond, _saddlepoint_cond2
 
 include("models.jl")
-export bdih, bdih!, Ubdih, Phi, _Ubdih
+export _bdih!, _bdih, Ubdih, Phi, dPhi
 export logphis, slicelogprob, cgtreelogprob, logdensity
 export initparams
 export _ea, _uv, _uvw, _eab
