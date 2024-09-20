@@ -1,10 +1,10 @@
-function plotssd!(ax, slice, params=nothing; cumulative=false, modelN=Inf)
+function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf)
     (t, s), ssd = slice
-    mass = sum(getfield.(ssd, :n))
-    ks = getfield.(ssd, :k)
+    mass = sum(values(ssd))
+    ks = collect(keys(ssd))
     max_empirical_k = maximum(ks)
 
-    ps = exp.(log.(getfield.(ssd, :n)) .- log(mass))
+    ps = exp.(log.(values(ssd)) .- log(mass))
     if cumulative
         # ps = 1 .- vcat(0, cumsum(ps))[1:end-1]
         ps = reverse(cumsum(reverse(ps)))
@@ -14,11 +14,11 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelN=Inf)
     mcolor = Makie.wong_colors()[6]
 
     if params !== nothing
-        if !isfinite(modelN)
-            modelN = max_empirical_k
+        if !isfinite(modelK)
+            modelK = max_empirical_k
         end
-        truncN = 2 * modelN
-        _logphis = logphis(truncN, t, s, params...)[1:modelN];
+        truncK = 2 * modelK
+        _logphis = logphis(truncK, t, s, params...)[1:modelK];
         if cumulative
             _logcumulsumexp = reduce((x, y) -> vcat(x, logaddexp(x[end], y)), _logphis, init=[-Inf])
             _logphis = log1mexp.(_logcumulsumexp)
@@ -42,7 +42,7 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelN=Inf)
     return ax
 end
 
-function plotssd(slice, params=nothing; cumulative=false, modelN=Inf)
+function plotssd(slice, params=nothing; cumulative=false, modelK=Inf)
     (t, s), _ = slice
     with_theme(theme_minimal()) do
         fig = Figure(size=(800, 600), fontsize=30);
@@ -50,23 +50,23 @@ function plotssd(slice, params=nothing; cumulative=false, modelN=Inf)
         title="SSD of slice (t=$(round(t, digits=3)), s=$(round(s, digits=3)))",
         xlabel="subtree size", ylabel="probability",
         xscale=log2, yscale=log);
-        plotssd!(ax, slice, params, cumulative=cumulative, modelN=modelN);
+        plotssd!(ax, slice, params, cumulative=cumulative, modelK=modelK);
         return fig
     end
 end
 
-function plotssds(cgtree, params=nothing; cumulative=false, modelN=Inf)
+function plotssds(cgtree, params=nothing; cumulative=false, modelK=Inf)
     with_theme(theme_minimal()) do
         cgtree = sort(cgtree, by=x->x[1])
         nbslices = length(cgtree)
         fig = Figure(size=(1800, 600 * div(nbslices+1, 2)), fontsize=30);
         for (i, ((t, s), ssd)) in enumerate(cgtree)
-            println("$i t=$(round(t, digits=4))  s=$(round(s, digits=4))  maxk=$(maximum(getfield.(ssd, :k)))")
+            println("$i t=$(round(t, digits=4))  s=$(round(s, digits=4))  maxk=$(maximum(keys(ssd)))")
             ax = Axis(fig[div(i-1, 2)+1, mod1(i, 2)],
             title="SSD of slice (t=$(round(t, digits=3)), s=$(round(s, digits=3)))",
             xlabel="subtree size", ylabel="probability",
             xscale=log2, yscale=log);
-            plotssd!(ax, ((t, s), ssd), params, cumulative=cumulative, modelN=modelN);
+            plotssd!(ax, ((t, s), ssd), params, cumulative=cumulative, modelK=modelK);
         end
         return fig
     end

@@ -219,6 +219,7 @@ function advance!(sampler::AM, cgtree; maxsubtree=Inf)
 
 end
 
+# One parameter updated at a time
 function advance!(sampler::LatentSlice, cgtree; maxsubtree=Inf)
     s = sampler
 
@@ -253,6 +254,7 @@ function advance!(sampler::LatentSlice, cgtree; maxsubtree=Inf)
 
 end
 
+# All parameters updated at once
 function _advance!(sampler::LatentSlice, cgtree, maxsubtree=Inf)
     s = sampler
     mask = s.mask

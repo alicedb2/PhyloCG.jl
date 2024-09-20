@@ -80,8 +80,8 @@ function Ubdih(z, ts::Vector{Float64}, b, d, rho, g, eta, alpha, beta)
 
     sol = solve(
         _bdih_prob_flat,
-        # Vern9(),
-        AutoTsit5(AutoVern9(Rodas5P())), # sure, why not
+        # Tsit5(),
+        AutoTsit5(Vern9()),
         u0=[real(z), imag(z)], tspan=(0.0, maximum(ts)),
         p=[b, d, rho, g, eta, alpha, beta],
         saveat=ts,
@@ -103,17 +103,17 @@ function _powerof2ceil(n)
     return 2^ceil(Int, log2(n))
 end
 
-function logphis(N, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/(N+1), optimizeradius=false)
+function logphis(K, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/(K+1), optimizeradius=false)
 
-    N += 1
+    K += 1
 
     if t < s || s < 0.0 || !(0 < f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 < g < 1) || eta < 0 || alpha <= 0 || beta <= 0
-        return fill(-Inf, N)
+        return fill(-Inf, K)
     end
 
     if optimizeradius
         # We recommend not to use optimizeradius
-        # and stick with the 1/N gap for now.
+        # and stick with the 1/K gap for now.
         # There's something strange with
         # xH models where the optimal radius
         # appears to not lie on or within the
@@ -122,7 +122,7 @@ function logphis(N, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/(N+1), optimi
         # This is a problem with the current 
         # implementation which uses the complex-step
         # derivative to calculate dPhi(r)/dr.
-        r = Phi_optimal_radius(N, t, s, f, b, d, rho, g, eta, alpha, beta)
+        r = Phi_optimal_radius(K, t, s, f, b, d, rho, g, eta, alpha, beta)
     else
         r = Phi_singularity(t, s, f, b, d, rho, g, eta, alpha, beta) - gap
     end
@@ -130,28 +130,32 @@ function logphis(N, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/(N+1), optimi
     # We know the coefficients are probabilities
     # and therefore positive real numbers, so
     # we can safely use the Hermitian FFT.
-    # Hermitian FFT only requires N/2 + 1 samples
+    # Hermitian FFT only requires K/2 + 1 samples
     # in the upper half of the the complex
     # half-circle (including 0 and π) to recover
-    # all N coefficients.
-    complex_halfcircle = r * exp.(2pi * im * (0:div(N, 2)) / N)
+    # all K coefficients.
+    complex_halfcircle = r * exp.(2pi * im * (0:div(K, 2)) / K)
     Phi_samples = Phi(complex_halfcircle, t, s, f, b, d, rho, g, eta, alpha, beta)
 
     # Hermitian FFT
-    upks = irfft(conj(Phi_samples), N)
-    log_pks = [upk > 0 ? log(upk) : -Inf for upk in upks] - (0:N-1) .* log(r)
+    upks = irfft(conj(Phi_samples), K)
+    log_phiks = [upk > 0 ? log(upk) : -Inf for upk in upks] - (0:K-1) .* log(r)
 
-    return log_pks[2:end]
+    # phi_0 = 0 by construction
+    # and Julia's 1-based indexing
+    # will make it so we can index
+    # logphis directly from the data
+    return log_phiks[2:end]
 end
 
 function slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta; maxsubtree=Inf)
 
-    ssd = filter(st -> st.k <= maxsubtree, ssd)
+    ssd = filter(st -> first(st) <= maxsubtree, ssd)
 
-    truncN = 2 * maximum(getfield.(ssd, :k))
-    gap = 1 / truncN
+    truncK = 2 * maximum(keys(ssd))
+    gap = 1 / truncK
 
-    _logphiks = logphis(truncN, t, s, f, b, d, rho, g, eta, alpha, beta, gap=gap)
+    _logphiks = logphis(truncK, t, s, f, b, d, rho, g, eta, alpha, beta, gap=gap)
 
     logprob = sum([n * _logphiks[k] for (k, n) in ssd])
 
@@ -165,7 +169,7 @@ function cgtreelogprob(cgtree, f, b, d, rho, g, eta, alpha, beta; dropfirstslice
         if s == 0.0 && dropfirstslice
             continue
         end
-        nbsubtrees += sum(getfield.(ssd, :n))
+        nbsubtrees += sum(values(ssd))
         logprob += slicelogprob(ssd, t, s, f, b, d, rho, g, eta, alpha, beta, maxsubtree=maxsubtree)
     end
 
