@@ -1,17 +1,17 @@
-using JSON, Glob
+using JSON, Glob, DataStructures
 
-maxmax(t) = maximum(maximum.(map(kn -> getfield.(kn, :k), values(t))))
+# maxmax(t) = maximum(maximum.(map(kn -> getfield.(kn, :k), values(t))))
+maxmax(t) = maximum(maximum.(map(kn -> keys(kn), values(t))))
 
 ssdfiles = glob("*subtree*", "/Users/alice/Documents/PhD/phyloinverse_lite/data")
-
-# data = Dict{String, Dict{@NamedTuple{t::Float64, s::Float64}, Tuple}}()
-data = Dict{String, Dict{@NamedTuple{t::Float64, s::Float64}, Vector{@NamedTuple{k::Int64, n::Int64}}}}()
+# data = Dict{String, Dict{@NamedTuple{t::Float64, s::Float64}, Vector{@NamedTuple{k::Int64, n::Int64}}}}()
+data = Dict{String, Dict{@NamedTuple{t::Float64, s::Float64}, DefaultDict{Int, Int, Int}}}()
 for fn in ssdfiles
     ontology = split(split(fn, '/')[end], '.')[1]
     open(fn, "r") do f
         ssds = JSON.parse(f)
-        # data[ontology] = Dict((t=ssd["t"], s=ssd["s"]) => Tuple(@NamedTuple{k::Int64, n::Int64}.(ssd["subtree_size_distribution"])) for ssd in ssds)
-        data[ontology] = Dict((t=ssd["t"], s=ssd["s"]) => @NamedTuple{k::Int64, n::Int64}.(ssd["subtree_size_distribution"]) for ssd in ssds)
+        # data[ontology] = Dict((t=ssd["t"], s=ssd["s"]) => @NamedTuple{k::Int64, n::Int64}.(ssd["subtree_size_distribution"]) for ssd in ssds)
+        data[ontology] = Dict((t=ssd["t"], s=ssd["s"]) => DefaultDict(0, [Pair(kn...) for kn in ssd["subtree_size_distribution"]]...) for ssd in ssds)
     end
 end
 data
