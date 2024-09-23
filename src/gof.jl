@@ -65,7 +65,7 @@ function advance_chain!(chain::GOFChain, nbiter; sampleevery=1)
         trunklogphis = chain.slicelogphis[trunkts]
         if 2 * proposed_trunk > length(chain.slicelogphis[trunkts])
             println("Resizing logphis for trunk slice $(trunkts)")
-            trunklogphis = logphis(2 * maximum(proposed_trunk), trunkts.t, trunkts.s, chain.params...)
+            trunklogphis = logphis(2 * proposed_trunk, trunkts.t, trunkts.s, chain.params...)
             chain.slicelogphis[trunkts] = trunklogphis
         end
 
@@ -76,8 +76,8 @@ function advance_chain!(chain::GOFChain, nbiter; sampleevery=1)
         # Compute Hastings ratio
         #  (gammaln(proposed_nb_parts + 1) - gammaln(np.array(list(Counter(proposed_part_sizes).values())) + 1).sum()
         # - gammaln(current_nb_parts + 1) + gammaln(np.array(list(Counter(current_part_sizes).values())) + 1).sum())
-        loghastings = loggamma(length(proposed_crown) + 1) - sum(loggamma.(values(countmap(proposed_crown))) .+ 1)
-        loghastings -= loggamma(length(bouquet.crown.ks) + 1) - sum(loggamma.(values(countmap(bouquet.crown.ks))) .+ 1)
+        loghastings = loggamma(length(proposed_crown) + 1) - sum(loggamma.(values(countmap(proposed_crown)) .+ 1))
+        loghastings -= loggamma(length(bouquet.crown.ks) + 1) - sum(loggamma.(values(countmap(bouquet.crown.ks)) .+ 1))
 
         logacceptance_ratio = logprob_ratio + loghastings
 
