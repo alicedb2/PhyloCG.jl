@@ -14,15 +14,21 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf)
         ps = reverse(cumsum(reverse(ps)))
     end
 
-    bpcolor = Makie.wong_colors()[5]
-    mcolor = Makie.wong_colors()[6]
+    bpcolor = wong_colors()[5]
+    mcolor = wong_colors()[6]
 
     if params !== nothing
-        if !isfinite(modelK)
-            modelK = max_empirical_k
+        if params isa ComponentArray
+            if !isfinite(modelK)
+                modelK = max_empirical_k
+            end
+            truncK = 2 * modelK
+            _logphis = logphis(truncK, t, s, params...)[1:modelK];
+        elseif params isa ModelSSDs
+            _logphis = params[(t=t, s=s)]
+        else
+            throw(ArgumentError("params must be a ComponentArray or a ModelSSDs"))
         end
-        truncK = 2 * modelK
-        _logphis = logphis(truncK, t, s, params...)[1:modelK];
         if cumulative
             _logcumulsumexp = reduce((x, y) -> vcat(x, logaddexp(x[end], y)), _logphis, init=[-Inf])
             _logphis = log1mexp.(_logcumulsumexp)

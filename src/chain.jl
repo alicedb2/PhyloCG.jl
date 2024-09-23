@@ -1,6 +1,6 @@
 mutable struct Chain
     sampler::Sampler
-    cgtree::Dict{@NamedTuple{t::Float64, s::Float64}, DefaultDict{Int, Int, Int}}
+    cgtree::CGTree
     params_chain::Vector{ComponentArray{Float64}}
     logprob_chain::Vector{Float64}
     maxsubtree::Real
@@ -58,11 +58,17 @@ end
 
 function burn!(chain, burn=0)
     if burn > 0
+        if 0 < burn < 1
+            burn = round(Int, burn * length(chain))
+        end
         chain.logprob_chain = chain.logprob_chain[burn+1:end]
         chain.params_chain = chain.params_chain[burn+1:end]
         chain.sampler.current_logprob = chain.logprob_chain[end]
         chain.sampler.params = chain.params_chain[end]
     elseif burn < 0
+        if -1 < burn < 0
+            burn = round(Int, -burn * length(chain))
+        end
         chain.logprob_chain = chain.logprob_chain[1:end+burn]
         chain.params_chain = chain.params_chain[1:end+burn]
         chain.sampler.current_logprob = chain.logprob_chain[end]
@@ -75,12 +81,12 @@ function burn(chain, burn=0)
     return burn!(deepcopy(chain), burn)
 end
 
-function advance_chain!(chain, n_iter)
+function advance_chain!(chain::Chain, nbiter)
     s = chain.sampler
 
-    prog = Progress(n_iter, showspeed=true)
+    prog = Progress(nbiter, showspeed=true)
 
-    for n in 1:n_iter
+    for n in 1:nbiter
         isfile("stop") && break
         advance!(chain.sampler, chain.cgtree, maxsubtree=chain.maxsubtree)
         push!(chain.logprob_chain, s.current_logprob)

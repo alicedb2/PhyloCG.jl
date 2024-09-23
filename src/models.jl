@@ -196,6 +196,18 @@ function cgtreelogprob(cgtree, f, b, d, rho, g, eta, alpha, beta; dropfirstslice
     return logprob
 end
 
+function logphis(cgtree, f, b, d, rho, g, eta, alpha, beta; maxsubtree=Inf)
+    _logphis = ModelSSDs()
+    for ((t, s), ssd) in cgtree
+        truncK = 2 * maximum(keys(ssd))
+        truncK = Int(min(truncK, 2 * maxsubtree))
+        gap = 1 / truncK
+        _logphis[(t=t, s=s)] = logphis(truncK, t, s, f, b, d, rho, g, eta, alpha, beta, gap=gap)[1:div(truncK, 2)]
+    end
+    return _logphis
+end
+
+
 function log_jeffreys_betadist(a, b)
     if a <= 0.0 || b <= 0.0
         return -Inf
