@@ -22,7 +22,7 @@ using ProgressMeter
 import MCMCDiagnosticTools: ess_rhat
 using Makie: stairs!, barplot!, xlims!, ylims!, 
              with_theme, Figure, Axis, theme_minimal,
-             wong_colors
+             wong_colors, Cycled, lines!, hist!
 import Makie: plot
 
 include("hypa12f1.jl")
