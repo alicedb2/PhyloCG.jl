@@ -2,7 +2,7 @@ using JSON, Glob, DataStructures
 
 maxmax(t) = maximum(maximum.(map(kn -> keys(kn), values(t))))
 
-ssdfiles = glob("*subtree*", "/Users/alice/Documents/PhD/phyloinverse_lite/data")
+ssdfiles = glob("*subtree*", "data")
 data = Dict{String, CGTree}()
 for fn in ssdfiles
     ontology = split(split(fn, '/')[end], '.')[1]
