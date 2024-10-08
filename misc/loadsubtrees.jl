@@ -8,7 +8,7 @@ for fn in ssdfiles
     ontology = split(split(fn, '/')[end], '.')[1]
     open(fn, "r") do f
         ssds = JSON.parse(f)
-        data[ontology] = Dict((t=ssd["t"], s=ssd["s"]) => DefaultDict(0, [Pair(kn...) for kn in ssd["subtree_size_distribution"]]...) for ssd in ssds)
+        data[ontology] = CGTree((t=ssd["t"], s=ssd["s"]) => DefaultDict(0, [Pair(kn...) for kn in ssd["subtree_size_distribution"]]...) for ssd in ssds)
     end
 end
 data
