@@ -2,7 +2,6 @@ const CGTree = Dict{@NamedTuple{t::Float64, s::Float64}, DefaultDict{Int, Int, I
 const Bouquet = @NamedTuple{trunk::@NamedTuple{i::Int, t::Float64, s::Float64, k::Int}, crown::@NamedTuple{i::Int, t::Float64, s::Float64, ks::Vector{Int}}}
 const ModelSSDs = Dict{@NamedTuple{t::Float64, s::Float64}, Vector{Float64}}
 
-
 function Base.isvalid(cgtree::CGTree)
     cgtree = sort!(collect(cgtree), by=tsssd->tsssd.first.t)
     first(cgtree).first.s == 0.0 || @warn "crown tip time != 0"
@@ -82,3 +81,5 @@ function pushbouquet!(cgtree::CGTree, bouquet::Bouquet)::CGTree
 
     return cgtree
 end
+
+maxmax(cgtree) = maximum(maximum.(map(kn -> keys(kn), values(cgtree))))

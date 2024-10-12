@@ -1,7 +1,5 @@
 using JSON, Glob, DataStructures
 
-maxmax(t) = maximum(maximum.(map(kn -> keys(kn), values(t))))
-
 ssdfiles = glob("*subtree*", "data")
 data = Dict{String, CGTree}()
 for fn in ssdfiles

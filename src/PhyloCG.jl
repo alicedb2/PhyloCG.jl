@@ -29,7 +29,7 @@ include("hypa12f1.jl")
 export hyp2f1a1, continued_hyp2f1a1
 
 include("coarsegrain.jl")
-export CGTree, popbouquet!, pushbouquet!, isvalid
+export CGTree, popbouquet!, pushbouquet!, isvalid, maxmax
 
 include("matrix_exp.jl")
 export Lbdi, logphis_exp

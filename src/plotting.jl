@@ -83,6 +83,10 @@ function plotssds(cgtree, params=nothing; cumulative=false, modelK=Inf)
 end
 
 function plot(chain; burn=0)
+    if (burn isa Int && (abs(burn) > length(chain)))        @error "burn must be less than the length of the chain (len=$(length(chain)))"
+        return nothing
+    end
+
     with_theme(theme_minimal()) do
         nbparams = sum(chain.sampler.mask[:])
         fig = Figure(size=(1600, 400 * (1 + nbparams)), fontsize=30);

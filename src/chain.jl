@@ -21,14 +21,14 @@ function chainsamples(chain::Chain, syms...; burn=0)
         slice = 1:length(chain.logprob_chain)
     end
 
-    if first(syms) isa Int
+    if isempty(syms)
+        return reduce(hcat, chain.params_chain[slice])
+    elseif first(syms) isa Int
         return [p[first(syms)] for p in chain.params_chain[slice]]
+    elseif syms === (:logdensity,)
+        return chain.logprob_chain[slice]
     else
-        if syms === (:logdensity,)
-            return chain.logprob_chain[slice]
-        else
-            return [reduce((x, s) -> getproperty(x, s), syms, init=p) for p in chain.params_chain[slice]]
-        end
+        return [reduce((x, s) -> getproperty(x, s), syms, init=p) for p in chain.params_chain[slice]]
     end
 end
 
@@ -81,10 +81,17 @@ function burn(chain, burn=0)
     return burn!(deepcopy(chain), burn)
 end
 
-function advance_chain!(chain::Chain, nbiter)
+function advance_chain!(chain::Chain, nbiter; pretty_progress=:repl)
     s = chain.sampler
 
-    prog = Progress(nbiter, showspeed=true)
+    if pretty_progress === :repl
+        progressio = stderr
+    elseif pretty_progress === :file
+        progressoutput = "progress_pid$(getpid()).txt"
+        progressio = open(progressoutput, "w")
+    end
+
+    prog = Progress(nbiter, showspeed=true; output=progressio)
 
     for n in 1:nbiter
         isfile("stop") && break
@@ -94,5 +101,11 @@ function advance_chain!(chain::Chain, nbiter)
         next!(prog, desc="$n")
     end
     finish!(prog)
+    
+    if pretty_progress === :file
+        close(progressio)
+        rm(progressoutput)
+    end
+
     return chain
 end
