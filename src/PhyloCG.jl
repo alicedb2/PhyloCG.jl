@@ -20,16 +20,19 @@ using FFTW: irfft
 using ComponentArrays: ComponentArray, labels, getaxes
 using ProgressMeter
 import MCMCDiagnosticTools: ess_rhat
-using Makie: stairs!, barplot!, xlims!, ylims!, 
-             with_theme, Figure, Axis, theme_minimal,
-             wong_colors, Cycled, lines!, hist!
+using Makie: stairs!, barplot!, lines!, hist!, vlines!,
+              Figure, Axis, xlims!, ylims!,
+              with_theme, theme_minimal, wong_colors, Cycled
 import Makie: plot
+using Printf: @sprintf
 
 include("hypa12f1.jl")
 export hyp2f1a1, continued_hyp2f1a1
 
 include("coarsegrain.jl")
-export CGTree, popbouquet!, pushbouquet!, isvalid, maxmax
+export CGTree, 
+       popbouquet!, pushbouquet!, 
+       isvalid, maxmax, size
 
 include("matrix_exp.jl")
 export Lbdi, logphis_exp
@@ -48,17 +51,19 @@ export initparams
 export _ea, _uv, _uvw, _eab
 
 include("samplers.jl")
-export AMWG, AM, LatentSlice, advance!
+export AMWG, AM, LatentSlice, advance!, acceptancerate
 
 include("chain.jl")
-export Chain, advance_chain!
-export chainsamples, bestsample, ess_rhat, burn!, burn
+export Chain, advance_chain!,
+       chainsamples, bestsample, 
+       ess_rhat, convergence
+       burn!, burn
 
 include("randompartitions.jl")
 export randompartitionAD5, conjugatepartition
 
 include("gof.jl")
-export GOFChain, Gstatistic
+export GOFChain, Gstatistic, acceptancerate
 
 include("plotting.jl")
 export plot, plotssd!, plotssd, plotssds

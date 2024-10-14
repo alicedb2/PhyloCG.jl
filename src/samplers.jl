@@ -2,8 +2,8 @@ abstract type Sampler end
 
 dims(sampler::Sampler) = sum(sampler.mask)
 
-function setmodel!(sampler::Sampler, model::String="fbd")
-    setmodel!(sampler.params, sampler.mask, model)
+function _setmodel!(sampler::Sampler, model::String="fbd")
+    _setmodel!(sampler.params, sampler.mask, model)
     return sampler
 end
 
@@ -21,6 +21,23 @@ mutable struct AMWG <: Sampler
     min_delta::Float64
 end
 
+
+"""
+    AMWG(model="fbd")
+
+Create a new Adaptive-Metropolis-Within-Gibbs (AMWG) sampler with the given model.
+
+### Arguments
+- `model::String`: the model to use. Can be any combination of "f", "b", "d", "i", and "h".
+  - "f": Incomplete lineage sampling. Adds a sampling rate `f` to the model, otherwise the rate is fixed to 1.
+  - "b": Birth/speciation model. Adds a birth/speciation rate `b` to the model.
+  - "d": Death/extinction model. Adds a death/extinction rate `d` to the model.
+  - "i": (Geometric) innovation model. Adds an innovation rate `rho` and geometric shape parameter `g` to the model. 
+  - "h": (Beta-geometric) heterogeneous innovation model. Adds an heterogeneous innovation rate `eta` and beta-geometric burst shape parameters `alpha` and `beta` to the model.
+
+### Returns
+- `sampler::AMWG`: the new AMWG sampler
+"""
 function AMWG(model="fbd")
     params = initparams()
     mask = similar(params, Bool)
@@ -33,16 +50,25 @@ function AMWG(model="fbd")
             fill!(similar(params, Int), 0), # accepted
             fill!(similar(params, Int), 0), # rejected
             0, 20, 0, 0.44, 0.01) # iter, batch_size, nb_batches, acceptance_target, min_delta
-    setmodel!(sampler, model)
+    _setmodel!(sampler, model)
     return sampler
 end
 
-function adjustlogscales!(sampler::AMWG; clearrates=true)
+"""
+    acceptancerate(sampler::AMWG)
+
+Return the acceptance rate of the sampler for the parameters of the current model mask.
+"""
+function acceptancerate(sampler::AMWG)
+    return sampler.acc[sampler.mask] ./ (sampler.acc[sampler.mask] .+ sampler.rej[sampler.mask])
+end
+
+function _adjustlogscales!(sampler::AMWG; clearrates=true)
     s = sampler
 
     delta_n = min(s.min_delta, 1/sqrt(s.nb_batches))
 
-    acc_rates = s.acc[s.mask] ./ (s.acc[s.mask] .+ s.rej[s.mask])
+    acc_rates = acceptancerate(s)
     s.logscales[s.mask] .+= delta_n .* (acc_rates .> s.acceptance_target) .- delta_n .* (acc_rates .< s.acceptance_target)
 
     if clearrates
@@ -69,7 +95,7 @@ end
 function AM(model="fbd")
     params = initparams()
     mask = similar(params, Bool)
-    setmodel!(params, mask, model)
+    _setmodel!(params, mask, model)
     d = sum(mask)
     sampler = AM(
             -Inf,
@@ -107,7 +133,7 @@ end
 function LatentSlice(model="fbd")
     params = initparams()
     mask = similar(params, Bool)
-    setmodel!(params, mask, model)
+    _setmodel!(params, mask, model)
 
     scales = fill!(similar(params), 1.0)
     # scales.f = 0.2
@@ -136,12 +162,29 @@ function LatentSlice(model="fbd")
     )
 end
 
+"""
+    advance!(sampler::AMWG, cgtree; maxsubtree=Inf)
+
+Advance the AMWG sampler by one iteration.
+
+### Returns
+- `sampler::AMWG`: the updated sampler
+
+# Notes
+If the heterogeneous innovation process is included in the model, the sampler uses 
+a hyperbolic change of variable `(eta, alpha, beta) -> (u, v, w)`, where 
+`u = 1/2 * log(eta / alpha)`, `v = sqrt(eta * alpha)`, and `beta / sqrt(eta * alpha)`,
+and adds the jacobian of the transformation to the acceptance probability. This
+change of variable improves the mixing of the sampler by removing strong correlations
+between the parameters of the heterogeneous innovation model. The inverse transformation
+is given by `eta = v * exp(u)`, `alpha = v * exp(-u)`, and `beta = v * w`.
+"""
 function advance!(sampler::AMWG, cgtree; maxsubtree=Inf)
     s = sampler
 
     if s.iter > s.batch_size
         s.nb_batches += 1
-        adjustlogscales!(s)
+        _adjustlogscales!(s)
         s.iter = 1
     end
 

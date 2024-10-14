@@ -2,6 +2,10 @@ const CGTree = Dict{@NamedTuple{t::Float64, s::Float64}, DefaultDict{Int, Int, I
 const Bouquet = @NamedTuple{trunk::@NamedTuple{i::Int, t::Float64, s::Float64, k::Int}, crown::@NamedTuple{i::Int, t::Float64, s::Float64, ks::Vector{Int}}}
 const ModelSSDs = Dict{@NamedTuple{t::Float64, s::Float64}, Vector{Float64}}
 
+function Base.size(cgtree::CGTree)
+    return sum([sum(values(ssd)) for ((t, s), ssd) in cgtree])
+end
+
 function Base.isvalid(cgtree::CGTree)
     cgtree = sort!(collect(cgtree), by=tsssd->tsssd.first.t)
     first(cgtree).first.s == 0.0 || @warn "crown tip time != 0"
@@ -20,7 +24,7 @@ end
 
 # Note that popbouquet! leaves cgtree in an invalid state
 # because it does not recursively update the crown of the crown
-function popbouquet!(cgtree::CGTree; rng=Random.GLOBAL_RNG)::Bouquet
+function _popbouquet!(cgtree::CGTree; rng=Random.GLOBAL_RNG)::Bouquet
     slices = sort!(collect(cgtree), by=tsssd->tsssd.first.s)
 
     # Pick the trunk from slices except the one closest to the crown
@@ -67,7 +71,7 @@ function popbouquet!(cgtree::CGTree; rng=Random.GLOBAL_RNG)::Bouquet
 
 end
 
-function pushbouquet!(cgtree::CGTree, bouquet::Bouquet)::CGTree
+function _pushbouquet!(cgtree::CGTree, bouquet::Bouquet)::CGTree
     trunk = bouquet.trunk
     crown = bouquet.crown
 

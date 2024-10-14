@@ -65,6 +65,21 @@ function plotssd(slice, params=nothing; cumulative=false, modelK=Inf)
     end
 end
 
+"""
+    plotssds(cgtree::CGTree; params=nothing, cumulative=false, modelK=Inf)
+
+Plot all subtree size distributions of a coarse-grained tree.
+If `params` is provided, the model SSDs are plotted as well. 
+
+### Arguments
+- `cgtree::CGTree`: the coarse-grained tree
+- `params::Nothing|ComponentArray{Float64}`: the parameters of the model
+- `cumulative::Bool`: whether to plot the cumulative distributions
+- `modelK::Real`: the maximum subtree size to consider when calculating the model SSDs
+
+### Returns
+- `fig::Figure`
+"""
 function plotssds(cgtree, params=nothing; cumulative=false, modelK=Inf)
     with_theme(theme_minimal()) do
         cgtree = sort(cgtree, by=x->x[1])
@@ -82,8 +97,21 @@ function plotssds(cgtree, params=nothing; cumulative=false, modelK=Inf)
     end
 end
 
-function plot(chain; burn=0)
-    if (burn isa Int && (abs(burn) > length(chain)))        @error "burn must be less than the length of the chain (len=$(length(chain)))"
+"""
+    plot(chain::Chain; burn=0)
+
+Plot the trance and marginal distributions of the log density and parameters of a chain.
+
+### Arguments
+- `chain::Chain`: the chain
+- `burn::Int|Float64`: the number or proportion of samples to discard from the beginning of the chain. Can be negative to keep samples from the end.
+
+### Returns
+- `fig::Figure`
+"""
+function plot(chain::Chain; burn=0)
+    if (burn isa Int && (abs(burn) > length(chain)))
+        @error "burn must be less than the length of the chain (len=$(length(chain)))"
         return nothing
     end
 
@@ -107,6 +135,20 @@ function plot(chain; burn=0)
             hist!(axmarginal, _samples, bins=50, color=Cycled(1), normalization=:pdf);
         end
 
+        return fig
+    end
+end
+
+function plot(chain::GOFChain; burn=0)
+    empiricalG = first(chain.G_chain)
+    chain = burn!(deepcopy(chain), burn)
+    with_theme(theme_minimal()) do
+        fig = Figure(size=(800, 900), fontsize=30);
+        ax = Axis(fig[1, 1], title="G-statistic", xlabel="iteration", ylabel="G-statistic");
+        lines!(ax, chain.G_chain, color=Cycled(1), linewidth=2);
+        ax = Axis(fig[2, 1], title="G-statistic distribution", xlabel="G", ylabel="Frequency");
+        hist!(ax, chain.G_chain, color=Cycled(1), normalization=:pdf, label="Synthetic G-statistics");
+        vlines!(ax, [empiricalG], color=Cycled(2), linestyle=:dash, linewidth=2, label="Empirical G-statistic");
         return fig
     end
 end
