@@ -1,5 +1,6 @@
 mutable struct GOFChain
     cgtree::CGTree
+    curr_cgtree::CGTree
     params::ComponentArray{Float64}
     slicelogphis::Dict{@NamedTuple{t::Float64, s::Float64}, Vector{Float64}}
     cgtree_chain::Vector{CGTree}
@@ -7,10 +8,17 @@ mutable struct GOFChain
     rng::AbstractRNG
     accepted::Int
     rejected::Int
+    maxsubtree::Number
 end
 
-function GOFChain(cgtree, params; seed=nothing)
+function GOFChain(cgtree, params; maxsubtree=Inf, seed=nothing)
     cgtree = deepcopy(cgtree)
+    if isfinite(maxsubtree)
+        for ssd in values(cgtree)
+            filter!(ks -> ks[1] <= maxsubtree, ssd)
+        end
+    end
+    curr_cgtree = deepcopy(cgtree)
     params = deepcopy(params)
     slicelogphis = logphis(cgtree, params...)
     G = Gstatistic(cgtree, slicelogphis)
@@ -23,7 +31,7 @@ function GOFChain(cgtree, params; seed=nothing)
     else
         throw(ArgumentError("seed must be an integer or an AbstractRNG"))
     end
-    return GOFChain(cgtree, params, slicelogphis, [deepcopy(cgtree)], [G], rng, 0, 0)
+    return GOFChain(cgtree, curr_cgtree, params, slicelogphis, [deepcopy(cgtree)], [G], rng, 0, 0, maxsubtree)
 end
 
 function acceptancerate(chain::GOFChain)
@@ -114,8 +122,8 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
 
     for n in 1:_nbiter
         crown_resizes, trunk_resizes = 0, 0
-        for _ in 1:size(chain.cgtree)
-            bouquet = _popbouquet!(chain.cgtree)
+        for _ in 1:size(chain.curr_cgtree)
+            bouquet = _popbouquet!(chain.curr_cgtree)
             nbtips = sum(bouquet.crown.ks)
             proposed_crown = randompartitionAD5(nbtips, rng=chain.rng)
             proposed_trunk = length(proposed_crown)
@@ -153,10 +161,10 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
             logacceptance_ratio = logprob_ratio + loghastings
 
             if log(rand(chain.rng)) < logacceptance_ratio
-                _pushbouquet!(chain.cgtree, proposed_bouquet)
+                _pushbouquet!(chain.curr_cgtree, proposed_bouquet)
                 chain.accepted += 1
             else
-                _pushbouquet!(chain.cgtree, bouquet)
+                _pushbouquet!(chain.curr_cgtree, bouquet)
                 chain.rejected += 1
             end
 
@@ -164,10 +172,10 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
 
         end
         
-        G = Gstatistic(chain.cgtree, chain.slicelogphis)
+        G = Gstatistic(chain.curr_cgtree, chain.slicelogphis)
         push!(chain.G_chain, G)
         if savecgtree
-            push!(chain.cgtree_chain, deepcopy(chain.cgtree))
+            push!(chain.cgtree_chain, deepcopy(chain.curr_cgtree))
         end
 
         conv = nothing
@@ -207,21 +215,7 @@ function Base.length(chain::GOFChain)
 end
 
 function burn!(chain::GOFChain, burn=0)
-    # chain.accepted = 0
-    # chain.rejected = 0
-    if burn > 0
-        if 0 < burn < 1
-            burn = round(Int, burn * length(chain))
-        end
-        # chain.cgtree_chain = chain.cgtree_chain[burn+1:end]
-        chain.G_chain = chain.G_chain[burn+1:end]
-    elseif burn < 0
-        if -1 < burn < 0
-            burn = round(Int, -burn * length(chain))
-        end
-        # chain.cgtree_chain = chain.cgtree_chain[1:end+burn]
-        chain.G_chain = chain.G_chain[1:end+burn]
-    end
+    chain.G_chain = chain.G_chain[_burnpos(length(chain), burn)+1:end]
     return chain
 end
 

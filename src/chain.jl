@@ -1,6 +1,7 @@
 mutable struct Chain
     sampler::Sampler
     cgtree::CGTree
+    truncated_cgtree::CGTree
     params_chain::Vector{ComponentArray{Float64}}
     logprob_chain::Vector{Float64}
     maxsubtree::Real
@@ -21,7 +22,12 @@ Create a chain
 - `chain::Chain`: the chain
 """
 function Chain(cgtree, sampler; maxsubtree=Inf)
-    chain = Chain(sampler, cgtree, [], [], maxsubtree)
+    cgtree = deepcopy(cgtree)
+    truncated_cgtree = deepcopy(cgtree)
+    if isfinite(maxsubtree)
+        truncated_cgtree = truncate!(truncated_cgtree, maxsubtree)
+    end
+    chain = Chain(sampler, cgtree, truncated_cgtree, [], [], maxsubtree)
     chain.sampler.current_logprob = logdensity(cgtree, sampler.params, maxsubtree=maxsubtree)
     return chain
 end
@@ -106,6 +112,25 @@ function convergence(chain::Chain; burn=0.5, digits=4)
     return map(x->round(x[1], digits=digits), ess_rhat(chains))
 end
 
+function _burnpos(len, burn)
+    if burn > 0
+        if 0 < burn < 1
+            burn = round(Int, burn * len)
+        end
+    elseif burn < 0
+        if -1 < burn < 0
+            burn = round(Int, -burn * len)
+        end
+        burn = len + burn
+    elseif iszero(burn)
+        return 0
+    end
+    if burn > len
+        throw(ArgumentError("burn must be less than the chain length"))
+    end
+    return burn
+end
+
 """
     burn!(chain::Chain, burn=0)
     burn!(chain::GOFChain, burn=0)
@@ -119,20 +144,8 @@ In-place burn-in
 - If `burn` is a float between -1 and 0, the last `|burn| * length(chain)` samples are kept.
 """
 function burn!(chain::Chain, burn=0)
-    if burn > 0
-        if 0 < burn < 1
-            burn = round(Int, burn * length(chain))
-        end
-    elseif b < 0
-        if -1 < burn < 0
-            burn = round(Int, -burn * length(chain))
-        end
-        burn = length(chain) + burn
-    end
-    if burn > length(chain)
-        @error "burn must be less than the chain length"
-        return chain
-    end
+
+    burn = _burnpos(length(chain), burn)
 
     # Set end before burn in case we are burning
     # the whole chain
@@ -196,10 +209,11 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
         _nbiter = nbiter
     end
 
-    conv = nothing
+    conv = "wait len(chain) >= 20"
     for n in 1:_nbiter
         isfile("stop") && break
-        advance!(chain.sampler, chain.cgtree, maxsubtree=chain.maxsubtree)
+        # advance!(chain.sampler, chain.cgtree, maxsubtree=chain.maxsubtree)
+        advance!(chain.sampler, chain.truncated_cgtree)
         push!(chain.logprob_chain, s.current_logprob)
         push!(chain.params_chain, deepcopy(s.params))
 

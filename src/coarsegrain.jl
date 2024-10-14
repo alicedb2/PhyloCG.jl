@@ -87,3 +87,14 @@ function _pushbouquet!(cgtree::CGTree, bouquet::Bouquet)::CGTree
 end
 
 maxmax(cgtree) = maximum(maximum.(map(kn -> keys(kn), values(cgtree))))
+
+function truncate!(cgtree::CGTree, maxsubtree=Inf)
+    for ssd in values(cgtree)
+        filter!(ks -> ks[1] <= maxsubtree, ssd)
+    end
+    return cgtree
+end
+
+function Base.truncate(cgtree::CGTree, maxsubtree::Int)
+    return truncate!(deepcopy(cgtree), maxsubtree)
+end

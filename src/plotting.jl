@@ -1,4 +1,4 @@
-function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf)
+function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf, ssdcolor=wong_colors()[5], ssdalpha=1.0, modelcolor=wong_colors()[6], setlims=true)
     (t, s), ssd = slice
 
     sidx = sortperm(collect(keys(ssd)))
@@ -13,9 +13,6 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf)
         # ps = 1 .- vcat(0, cumsum(ps))[1:end-1]
         ps = reverse(cumsum(reverse(ps)))
     end
-
-    bpcolor = wong_colors()[5]
-    mcolor = wong_colors()[6]
 
     if params !== nothing
         if params isa ComponentArray
@@ -37,16 +34,20 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf)
         end
         _ps = exp.(_logphis)
         lb = minimum(vcat(ps, _ps)/2)
-        barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=bpcolor, strokecolor=bpcolor);
-        stairs!(ax, 1:length(_ps), _ps, step=:center, color=mcolor, linewidth=5);
+        barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=(ssdcolor, ssdalpha), strokecolor=(ssdcolor, ssdalpha));
+        stairs!(ax, 1:length(_ps), _ps, step=:center, color=modelcolor, linewidth=5);
         # ylims!(ax, minimum(filter(x-> x > 0, _ps))/4, ℯ)
-        xlims!(ax, 1, max_empirical_k)
-        ylims!(ax, lb, exp(1))
+        if setlims
+            xlims!(ax, 1, max_empirical_k)
+            ylims!(ax, lb, exp(1))
+        end
     else
         lb = minimum(ps)/2
-        barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=bpcolor, strokecolor=bpcolor);
-        ylims!(ax, lb, ℯ);
-        xlims!(ax, 1, max_empirical_k)
+        barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=(ssdcolor, ssdalpha), strokecolor=(ssdcolor, ssdalpha));
+        if setlims
+            ylims!(ax, lb, ℯ);
+            xlims!(ax, 1, max_empirical_k)
+        end
     end
 
     return ax
@@ -57,9 +58,9 @@ function plotssd(slice, params=nothing; cumulative=false, modelK=Inf)
     with_theme(theme_minimal()) do
         fig = Figure(size=(800, 600), fontsize=30);
         ax = Axis(fig[1, 1],
-        title="SSD of slice (t=$(round(t, digits=3)), s=$(round(s, digits=3)))",
-        xlabel="subtree size", ylabel="probability",
-        xscale=log2, yscale=log);
+                  title="SSD of slice (t=$(round(t, digits=3)), s=$(round(s, digits=3)))",
+                  xlabel="subtree size", ylabel="probability",
+                  xscale=log2, yscale=log);
         plotssd!(ax, slice, params, cumulative=cumulative, modelK=modelK);
         return fig
     end
@@ -80,20 +81,38 @@ If `params` is provided, the model SSDs are plotted as well.
 ### Returns
 - `fig::Figure`
 """
-function plotssds(cgtree, params=nothing; cumulative=false, modelK=Inf)
+function plotssds(cgtree, params=nothing; cumulative=false, modelK=Inf, secondcgtree=nothing)
     with_theme(theme_minimal()) do
         cgtree = sort(cgtree, by=x->x[1])
         nbslices = length(cgtree)
         fig = Figure(size=(1800, 600 * div(nbslices+1, 2)), fontsize=30);
         for (i, ((t, s), ssd)) in enumerate(cgtree)
-            println("$i t=$(round(t, digits=4))  s=$(round(s, digits=4))  maxk=$(maximum(keys(ssd)))")
+            if !isnothing(params)
+                println("Calculating slice $i t=$(round(t, digits=4))  s=$(round(s, digits=4))  maxk=$(maximum(keys(ssd)))")
+            end
             ax = Axis(fig[div(i-1, 2)+1, mod1(i, 2)],
-            title="SSD of slice (t=$(round(t, digits=3)), s=$(round(s, digits=3)))",
-            xlabel="subtree size", ylabel="probability",
-            xscale=log2, yscale=log);
+                      title="SSD of slice (t=$(round(t, digits=3)), s=$(round(s, digits=3)))",
+                      xlabel="subtree size", ylabel="probability",
+                      xscale=log2, yscale=log);
             plotssd!(ax, ((t, s), ssd), params, cumulative=cumulative, modelK=modelK);
+            if !isnothing(secondcgtree)
+                plotssd!(ax, ((t, s), secondcgtree[(t=t, s=s)]), cumulative=cumulative, ssdcolor=wong_colors()[3], ssdalpha=0.5, setlims=false);
+            end
         end
         return fig
+    end
+end
+
+function plotssds(chain::Chain; bestparams=true, cumulative=false, modelK=Inf)
+    if bestparams
+        params = bestsample(chain)
+    else
+        params = nothing
+    end
+    if isfinite(chain.maxsubtree)
+        return plotssds(chain.cgtree, params, cumulative=cumulative, modelK=modelK, secondcgtree=chain.truncated_cgtree)
+    else
+        return plotssds(chain.cgtree, params, cumulative=cumulative, modelK=modelK)
     end
 end
 
@@ -110,10 +129,8 @@ Plot the trance and marginal distributions of the log density and parameters of 
 - `fig::Figure`
 """
 function plot(chain::Chain; burn=0)
-    if (burn isa Int && (abs(burn) > length(chain)))
-        @error "burn must be less than the length of the chain (len=$(length(chain)))"
-        return nothing
-    end
+    
+    burnidx = _burnpos(length(chain), burn)
 
     with_theme(theme_minimal()) do
         nbparams = sum(chain.sampler.mask[:])
@@ -122,17 +139,22 @@ function plot(chain::Chain; burn=0)
         _labels = labels(chain.sampler.params)
 
         axtrace = Axis(fig[1, 1], title="log density", xlabel="iteration", ylabel="log density");
-        _samples = chainsamples(chain, :logdensity, burn=burn)
-        lines!(axtrace, _samples, color=Cycled(1), linewidth=2);
+        samples = chainsamples(chain, :logdensity, burn=burn)
+        bestidx = argmax(samples)
+        lines!(axtrace, burnidx+1:length(chain), samples, color=Cycled(1), linewidth=2);
+        vlines!(axtrace, [bestidx], color=Cycled(6), linestyle=:dash, linewidth=4);
         axmarginal = Axis(fig[1, 2], title="log density", xlabel="log density", ylabel="probability");
-        hist!(axmarginal, _samples, bins=50, color=Cycled(1), normalization=:pdf);
+        hist!(axmarginal, samples, bins=50, color=Cycled(1), normalization=:pdf);
 
         for (i, k) in enumerate(findall(chain.sampler.mask[:]))
             axtrace = Axis(fig[i+1, 1], xlabel="iteration", ylabel=_labels[k]);
-            _samples = chainsamples(chain, k, burn=burn)
-            lines!(axtrace, _samples, color=Cycled(1), linewidth=2);
+            samples = chainsamples(chain, k, burn=burn)
+            bestval = samples[bestidx]
+            lines!(axtrace, burnidx+1:length(chain), samples, color=Cycled(1), linewidth=2);
+            vlines!(axtrace, [bestidx], color=Cycled(6), linestyle=:dash, linewidth=4);
             axmarginal = Axis(fig[i+1, 2], xlabel=_labels[k], ylabel="probability");
-            hist!(axmarginal, _samples, bins=50, color=Cycled(1), normalization=:pdf);
+            hist!(axmarginal, samples, bins=50, color=Cycled(1), normalization=:pdf);
+            vlines!(axmarginal, [bestval], color=Cycled(2), linestyle=:dash, linewidth=4);
         end
 
         return fig
@@ -144,11 +166,11 @@ function plot(chain::GOFChain; burn=0)
     chain = burn!(deepcopy(chain), burn)
     with_theme(theme_minimal()) do
         fig = Figure(size=(800, 900), fontsize=30);
-        ax = Axis(fig[1, 1], title="G-statistic", xlabel="iteration", ylabel="G-statistic");
+        ax = Axis(fig[1, 1], title="G-statistic chain", xlabel="iteration", ylabel="G");
         lines!(ax, chain.G_chain, color=Cycled(1), linewidth=2);
         ax = Axis(fig[2, 1], title="G-statistic distribution", xlabel="G", ylabel="Frequency");
-        hist!(ax, chain.G_chain, color=Cycled(1), normalization=:pdf, label="Synthetic G-statistics");
-        vlines!(ax, [empiricalG], color=Cycled(2), linestyle=:dash, linewidth=2, label="Empirical G-statistic");
+        hist!(ax, chain.G_chain, color=Cycled(1), normalization=:pdf, label="Null distribution");
+        vlines!(ax, [empiricalG], color=Cycled(2), linestyle=:dash, linewidth=2, label="Empirical G");
         return fig
     end
 end

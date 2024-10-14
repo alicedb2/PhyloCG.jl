@@ -49,7 +49,7 @@ function AMWG(model="fbd")
             logscales,  # logscales
             fill!(similar(params, Int), 0), # accepted
             fill!(similar(params, Int), 0), # rejected
-            0, 20, 0, 0.44, 0.01) # iter, batch_size, nb_batches, acceptance_target, min_delta
+            0, 20, 0, 0.44, 0.1) # iter, batch_size, nb_batches, acceptance_target, min_delta
     _setmodel!(sampler, model)
     return sampler
 end

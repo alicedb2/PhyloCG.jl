@@ -38,6 +38,7 @@ function _bdih!(du, u, p, t)
     if eta > 0
         # _₂F₁ is not stable at large alpha
         # _du += eta * alpha / (alpha + beta) * (u - 1) * u * _₂F₁(1, alpha + 1, alpha + beta + 1, u)
+        # Use our beloved and hacky continued-fraction representation
         _du += eta * alpha / (alpha + beta) * (u - 1) * u * hyp2f1a1(alpha + 1, alpha + beta + 1, u)
     end
     du .= [real(_du), imag(_du)]
@@ -359,12 +360,12 @@ Compute the set of log probabilities of observed subtree sizes for all slices of
 function logphis(cgtree, f, b, d, rho, g, eta, alpha, beta; maxsubtree=Inf)
     _logphis = ModelSSDs()
     truncKs = _slicetruncK(cgtree, maxsubtree=maxsubtree)
-    for ((t, s), ssd) in cgtree
+    for ts in keys(cgtree)
         # truncK = 2 * maximum(keys(ssd))
         # truncK = Int(min(truncK, 2 * maxsubtree))
-        truncK = truncKs[(t=t, s=s)]        
+        truncK = truncKs[ts]        
         gap = 1 / truncK
-        _logphis[(t=t, s=s)] = logphis(truncK, t, s, f, b, d, rho, g, eta, alpha, beta, gap=gap)[1:div(truncK, 2)]
+        _logphis[ts] = logphis(truncK, ts.t, ts.s, f, b, d, rho, g, eta, alpha, beta, gap=gap)[1:div(truncK, 2)]
     end
     return _logphis
 end
@@ -401,7 +402,7 @@ Jeffreys prior on Poisson rate is improper and given by
 ### Arguments
 - `rate_upper_bound::Float64`: Truncate to avoid numerical instability. This makes the prior proper
 """
-function log_jeffreys_rate(r; rate_upper_bound=50.0)
+function log_jeffreys_rate(r; rate_upper_bound=20.0)
     if 0.0 < r <= rate_upper_bound
         lp = -1/2 * log(r)
         if isfinite(rate_upper_bound)

@@ -30,7 +30,7 @@ include("hypa12f1.jl")
 export hyp2f1a1, continued_hyp2f1a1
 
 include("coarsegrain.jl")
-export CGTree, 
+export CGTree, truncate!, truncate,
        popbouquet!, pushbouquet!, 
        isvalid, maxmax, size
 
