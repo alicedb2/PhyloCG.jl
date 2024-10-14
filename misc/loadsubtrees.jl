@@ -49,7 +49,7 @@ for ontologies in sort!(collect(values(binned_unique)), by=first)
 end
 
 println("Found $(length(binned_unique)) unique ontology bins")
-if iszero(_nodiscr) 
+if iszero(_nodiscr)
     println("No prefix discrepencies found")
 else
     println("Some bins contain ontologies with prefix discrepencies")
@@ -72,13 +72,13 @@ ontologies_maxmax
 #       All ontologies with their CGTree
 # binned_unique: Dict{CGTree, Vector{String}}
 #       All unique CGTree with bins of ontologies sharing the same CGTree
-#       Each bin is sorted by length of the ontologies 
+#       Each bin is sorted by length of the ontologies
 #       We verify that all ontologies in a bin share the same prefix
 # unique_bins = Dict{String, Vector{String}}
 #       Ontology bins sharing the same CGTree
 # unique_data: Dict{String, CGTree}
 #       All unique ontologies with their CGTree
-#       We pick the last ontology in each bin as 
+#       We pick the last ontology in each bin as
 #       the representative so that it contains
 #       the most information (longest ontology)
 #
