@@ -89,7 +89,7 @@ end
 
 Advance the goodness-of-fit chain by `nbiter` iterations and save the G-statistic at each iteration.
 
-At each iteration the chain is advanced by as many sub-iterations as the 
+At each iteration the chain is advanced by as many sub-iterations as the
 number of subtrees in the current state of the coarse-grained tree.
 
 ### Arguments
@@ -104,7 +104,7 @@ number of subtrees in the current state of the coarse-grained tree.
 - Each iteration consists of as many sub-iterations as the number of subtrees in the current coarse-grained tree at the beginning of the iteration.
 """
 function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutput=:repl)
-    
+
     if progressoutput === :repl
         progressio = stderr
     elseif progressoutput === :file
@@ -171,7 +171,7 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
             isfile("stop") && break
 
         end
-        
+
         G = Gstatistic(chain.curr_cgtree, chain.slicelogphis)
         push!(chain.G_chain, G)
         if savecgtree
@@ -198,7 +198,7 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
             ("convergence (burn 50%)", conv),
             ("note", note)
         ])
-        
+
         isfile("stop") && break
 
     end
@@ -207,7 +207,7 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
         close(progressio)
         rm(progressoutput)
     end
-    
+
 end
 
 function Base.length(chain::GOFChain)

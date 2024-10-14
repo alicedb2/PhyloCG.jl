@@ -23,7 +23,7 @@ function randompartitionAD5(n, m=nothing; rng=Random.GLOBAL_RNG)
     Uniform sampling of partitions of n using PDC with deterministic second half
     Algorithm 5 in Arratia & DeSalvo 2011 arXiv:1110.3856v7 and DeSalvo's answer at
     http://stackoverflow.com/questions/2161406/how-do-i-generate-a-uniform-random-integer-partition
-    
+
     Question: How do I generate a uniform random integer partition?
     Stephen DeSalvo answered Nov 7 '13 at 6:46
 

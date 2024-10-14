@@ -144,7 +144,7 @@ end
 #         prob,
 #         # Tsit5(),
 #         AutoTsit5(Vern9()),
-#         # u0=[f(zs[k]) for k in eachindex(zs) for f in (real, imag)], 
+#         # u0=[f(zs[k]) for k in eachindex(zs) for f in (real, imag)],
 #         tspan=(0.0, maximum(ts)),
 #         p=[b, d, rho, g, eta, alpha, beta],
 #         saveat=ts,
@@ -167,7 +167,7 @@ end
 """
     Phi(ys, t, s, f, b, d, rho, g, eta, alpha, beta)
 
-Compute the generating function Phi(y, t, s) of observed subtree sizes of the FBDIH model 
+Compute the generating function Phi(y, t, s) of observed subtree sizes of the FBDIH model
 for the slice (t, s), t >= s, and the given parameters.
 
 ### Arguments
@@ -244,7 +244,7 @@ function logphis(K, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/(K+1), optimi
         # appears to not lie on or within the
         # unit circle, but the imaginary part
         # is not 0 anymore beyond the unit circle.
-        # This is a problem with the current 
+        # This is a problem with the current
         # implementation which uses the complex-step
         # derivative to calculate dPhi(r)/dr.
         r = Phi_optimal_radius(K, t, s, f, b, d, rho, g, eta, alpha, beta)
@@ -363,7 +363,7 @@ function logphis(cgtree, f, b, d, rho, g, eta, alpha, beta; maxsubtree=Inf)
     for ts in keys(cgtree)
         # truncK = 2 * maximum(keys(ssd))
         # truncK = Int(min(truncK, 2 * maxsubtree))
-        truncK = truncKs[ts]        
+        truncK = truncKs[ts]
         gap = 1 / truncK
         _logphis[ts] = logphis(truncK, ts.t, ts.s, f, b, d, rho, g, eta, alpha, beta, gap=gap)[1:div(truncK, 2)]
     end
@@ -376,7 +376,7 @@ end
 Bivariate Jeffreys prior on the parameters of the Beta distribution.
 See `Yang & Berger (1998) A Catalog of Noninformative Priors` (page 7) for details.
 
-It is given by the square root of the determinant of 
+It is given by the square root of the determinant of
 ```
    [ ψ⁽¹⁾(α) - ψ⁽¹⁾(α + β)        -ψ⁽¹⁾(α + β)     ]
    [                                               ]
@@ -469,7 +469,7 @@ Log prior probability of the parameters of the model. Only includes
 the priors on the parameters that are included in the model.
 
 ### Arguments
-- `p::ComponentArray`: the parameters of the model. 
+- `p::ComponentArray`: the parameters of the model.
 Priors for each process "fbdih" is included when `0 < f < 1`, `b > 0`, `d > 0`, `i.rho > 0`, `h.eta > 0`, respectively.
 
 ### Returns

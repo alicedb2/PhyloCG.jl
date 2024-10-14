@@ -70,7 +70,7 @@ end
     plotssds(cgtree::CGTree; params=nothing, cumulative=false, modelK=Inf)
 
 Plot all subtree size distributions of a coarse-grained tree.
-If `params` is provided, the model SSDs are plotted as well. 
+If `params` is provided, the model SSDs are plotted as well.
 
 ### Arguments
 - `cgtree::CGTree`: the coarse-grained tree
@@ -129,7 +129,7 @@ Plot the trance and marginal distributions of the log density and parameters of 
 - `fig::Figure`
 """
 function plot(chain::Chain; burn=0)
-    
+
     burnidx = _burnpos(length(chain), burn)
 
     with_theme(theme_minimal()) do

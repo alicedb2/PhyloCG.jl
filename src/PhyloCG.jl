@@ -9,7 +9,7 @@ using Distributions: Normal, Beta, Gamma, Truncated,
                      Exponential, Uniform, Categorical,
                      Geometric
 using StatsBase
-using StatsFuns: logsumexp, logaddexp, logit, 
+using StatsFuns: logsumexp, logaddexp, logit,
                  logistic, log1mexp
 
 using SpecialFunctions: loggamma, logabsgamma, polygamma
@@ -31,7 +31,6 @@ export hyp2f1a1, continued_hyp2f1a1
 
 include("coarsegrain.jl")
 export CGTree, truncate!, truncate,
-       popbouquet!, pushbouquet!, 
        isvalid, maxmax, size
 
 include("matrix_exp.jl")
@@ -55,7 +54,7 @@ export AMWG, AM, LatentSlice, advance!, acceptancerate
 
 include("chain.jl")
 export Chain, advance_chain!,
-       chainsamples, bestsample, 
+       chainsamples, bestsample,
        ess_rhat, convergence
        burn!, burn
 

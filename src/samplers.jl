@@ -32,7 +32,7 @@ Create a new Adaptive-Metropolis-Within-Gibbs (AMWG) sampler with the given mode
   - "f": Incomplete lineage sampling. Adds a sampling rate `f` to the model, otherwise the rate is fixed to 1.
   - "b": Birth/speciation model. Adds a birth/speciation rate `b` to the model.
   - "d": Death/extinction model. Adds a death/extinction rate `d` to the model.
-  - "i": (Geometric) innovation model. Adds an innovation rate `rho` and geometric shape parameter `g` to the model. 
+  - "i": (Geometric) innovation model. Adds an innovation rate `rho` and geometric shape parameter `g` to the model.
   - "h": (Beta-geometric) heterogeneous innovation model. Adds an heterogeneous innovation rate `eta` and beta-geometric burst shape parameters `alpha` and `beta` to the model.
 
 ### Returns
@@ -171,8 +171,8 @@ Advance the AMWG sampler by one iteration.
 - `sampler::AMWG`: the updated sampler
 
 # Notes
-If the heterogeneous innovation process is included in the model, the sampler uses 
-a hyperbolic change of variable `(eta, alpha, beta) -> (u, v, w)`, where 
+If the heterogeneous innovation process is included in the model, the sampler uses
+a hyperbolic change of variable `(eta, alpha, beta) -> (u, v, w)`, where
 `u = 1/2 * log(eta / alpha)`, `v = sqrt(eta * alpha)`, and `beta / sqrt(eta * alpha)`,
 and adds the jacobian of the transformation to the acceptance probability. This
 change of variable improves the mixing of the sampler by removing strong correlations

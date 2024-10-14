@@ -32,22 +32,11 @@ function Chain(cgtree, sampler; maxsubtree=Inf)
     return chain
 end
 
+Base.length(chain::Chain) = length(chain.logprob_chain)
+
 function chainsamples(chain::Chain, syms...; burn=0)
 
-    if 0 < burn < 1
-        burn = round(Int, burn * length(chain))
-    elseif -1 < burn < 0
-        burn = round(Int, -burn * length(chain))
-    end
-
-    if burn < 0
-        burn = length(chain) + burn
-    end
-
-    if burn > length(chain)
-        @error "burn must be less than the chain length"
-        return nothing
-    end
+    burn = _burnpos(length(chain), burn)
 
     if isempty(syms)
         return reduce(hcat, chain.params_chain[burn+1:end])
@@ -59,9 +48,6 @@ function chainsamples(chain::Chain, syms...; burn=0)
         return [reduce((x, s) -> getproperty(x, s), syms, init=p) for p in chain.params_chain[burn+1:end]]
     end
 end
-
-Base.length(chain::Chain) = length(chain.logprob_chain)
-
 
 """
     argmax(chain::Chain, logprob=:logdensity)
@@ -105,8 +91,8 @@ function convergence(chain::Chain; burn=0.5, digits=4)
     chains = vcat(logprobs, paramsamples)'
     # Standardize chains
     chains = (chains .- mean(chains, dims=1)) ./ std(chains, dims=1)
-    # Reshape chains for ess_rhat such that each parameter + logprob 
-    # chain is considered as a separate chain of the same process 
+    # Reshape chains for ess_rhat such that each parameter + logprob
+    # chain is considered as a separate chain of the same process
     # instead of a single chain with multiple parameters
     chains = reshape(chains, size(chains, 1), size(chains, 2), 1)
     return map(x->round(x[1], digits=digits), ess_rhat(chains))
@@ -139,8 +125,8 @@ In-place burn-in
 
 ### Arguments
 - If `burn` is a positive integer, the first `burn` samples are removed.
-- If `burn` is a negative integer, only the last `|burn|` samples are kept. 
-- If `burn` is a float between 0 and 1, the fist `burn * length(chain)` samples are removed. 
+- If `burn` is a negative integer, only the last `|burn|` samples are kept.
+- If `burn` is a float between 0 and 1, the fist `burn * length(chain)` samples are removed.
 - If `burn` is a float between -1 and 0, the last `|burn| * length(chain)` samples are kept.
 """
 function burn!(chain::Chain, burn=0)
@@ -164,8 +150,8 @@ Burn-in a copy of the chain
 
 ### Arguments
 - If `burn` is a positive integer, the first `burn` samples are removed.
-- If `burn` is a negative integer, only the last `|burn|` samples are kept. 
-- If `burn` is a float between 0 and 1, the fist `burn * length(chain)` samples are removed. 
+- If `burn` is a negative integer, only the last `|burn|` samples are kept.
+- If `burn` is a float between 0 and 1, the fist `burn * length(chain)` samples are removed.
 - If `burn` is a float between -1 and 0, the last `|burn| * length(chain)` samples are kept.
 """
 function burn(chain, burn=0)
@@ -234,7 +220,7 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
         end
 
     end
-    
+
     if progressoutput === :file
         close(progressio)
         rm(progressoutput)
