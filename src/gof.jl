@@ -34,6 +34,10 @@ function GOFChain(cgtree, params; maxsubtree=Inf, seed=nothing)
     return GOFChain(cgtree, curr_cgtree, params, slicelogphis, [deepcopy(cgtree)], [G], rng, 0, 0, maxsubtree)
 end
 
+function GOFChain(chain::Chain, params=bestsample(chain); maxsubtree=chain.maxsubtree, seed=nothing)
+    return GOFChain(chain.cgtree, params, maxsubtree=maxsubtree, seed=seed)
+end
+
 function acceptancerate(chain::GOFChain)
     return chain.accepted / (chain.accepted + chain.rejected)
 end
@@ -100,10 +104,10 @@ number of subtrees in the current state of the coarse-grained tree.
 - `chain::GOFChain`: the chain
 
 # Notes
-- If a file named `stop` is found in the current directory, the chain is stopped gracefully.
+- If a file named `stopgof` is found in the current directory, the chain is stopped gracefully.
 - Each iteration consists of as many sub-iterations as the number of subtrees in the current coarse-grained tree at the beginning of the iteration.
 """
-function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutput=:repl)
+function advance_chain!(chain::GOFChain, nbiter; ess50target=200, savecgtree=false, progressoutput=:repl)
 
     if progressoutput === :repl
         progressio = stderr
@@ -122,7 +126,7 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
 
     for n in 1:_nbiter
         crown_resizes, trunk_resizes = 0, 0
-        for _ in 1:size(chain.curr_cgtree)
+        for _ in 1:nbsubtrees(chain.curr_cgtree)
             bouquet = _popbouquet!(chain.curr_cgtree)
             nbtips = sum(bouquet.crown.ks)
             proposed_crown = randompartitionAD5(nbtips, rng=chain.rng)
@@ -168,7 +172,7 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
                 chain.rejected += 1
             end
 
-            isfile("stop") && break
+            isfile("stopgof") && break
 
         end
 
@@ -178,10 +182,14 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
             push!(chain.cgtree_chain, deepcopy(chain.curr_cgtree))
         end
 
-        conv = nothing
+        conv = "wait 40"
         if length(chain) > 40
             conv = ess_rhat(chain.G_chain[div(end, 2):end])
             conv = map(x->round(x, digits=3), conv)
+            if nbiter === :ess && conv.ess >= ess50target
+                println("Convergence target reached!")
+                break
+            end
         end
 
         if trunk_resizes > 0 || crown_resizes > 0
@@ -199,7 +207,7 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
             ("note", note)
         ])
 
-        isfile("stop") && break
+        isfile("stopgof") && break
 
     end
 
@@ -210,16 +218,11 @@ function advance_chain!(chain::GOFChain, nbiter; savecgtree=false, progressoutpu
 
 end
 
-function Base.length(chain::GOFChain)
-    return length(chain.G_chain)
-end
+Base.length(chain::GOFChain) = length(chain.G_chain)
 
 function burn!(chain::GOFChain, burn=0)
-    chain.G_chain = chain.G_chain[_burnpos(length(chain), burn)+1:end]
+    chain.G_chain = chain.G_chain[_burnlength(length(chain), burn)+1:end]
     return chain
 end
 
-function burn(chain::GOFChain, burn=0)
-    chain = deepcopy(chain)
-    return burn!(chain, burn)
-end
+burn(chain::GOFChain, burn=0) = burn!(deepcopy(chain), burn)

@@ -55,8 +55,8 @@ export AMWG, AM, LatentSlice, advance!, acceptancerate
 include("chain.jl")
 export Chain, advance_chain!,
        chainsamples, bestsample,
-       ess_rhat, convergence
-       burn!, burn
+       ess_rhat, convergence,
+       newmaxsubtree!, burn!, burn, nbks, nbsubtrees
 
 include("randompartitions.jl")
 export randompartitionAD5, conjugatepartition

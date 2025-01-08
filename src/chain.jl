@@ -27,8 +27,18 @@ function Chain(cgtree, sampler; maxsubtree=Inf)
     if isfinite(maxsubtree)
         truncated_cgtree = truncate!(truncated_cgtree, maxsubtree)
     end
-    chain = Chain(sampler, cgtree, truncated_cgtree, [], [], maxsubtree)
-    chain.sampler.current_logprob = logdensity(cgtree, sampler.params, maxsubtree=maxsubtree)
+    init_logprob = logdensity(cgtree, sampler.params, maxsubtree=maxsubtree)
+    init_params = deepcopy(sampler.params)
+    chain = Chain(sampler, cgtree, truncated_cgtree, [init_params], [init_logprob], maxsubtree)
+    return chain
+end
+
+function newmaxsubtree!(chain::Chain, maxsubtree=Inf)
+    maxsubtree > 0 || throw(ArgumentError("maxsubtree must be positive"))
+    maxsubtree == chain.maxsubtree && return chain
+    chain.truncated_cgtree = truncate(chain.cgtree, maxsubtree)
+    chain.maxsubtree = maxsubtree
+    chain.sampler.current_logprob = logdensity(chain.truncated_cgtree, chain.sampler.params)
     return chain
 end
 
@@ -36,7 +46,7 @@ Base.length(chain::Chain) = length(chain.logprob_chain)
 
 function chainsamples(chain::Chain, syms...; burn=0)
 
-    burn = _burnpos(length(chain), burn)
+    burn = _burnlength(length(chain), burn)
 
     if isempty(syms)
         return reduce(hcat, chain.params_chain[burn+1:end])
@@ -70,6 +80,16 @@ function Base.argmax(chain::Chain, logprob=:logdensity)
     end
 end
 
+
+"""
+    bestsample(chain::Chain, logprob=:map)
+
+Return the sample with the highest logprob
+
+### Arguments
+- `chain::Chain`: the chain
+- `logprob::Symbol`: the logprob to maximize. Can be `:logdensity` (default), `:map` (equiv to :logdensity), `:mle`, or `:prior`.
+"""
 bestsample(chain::Chain, logprob=:map) = chain.params_chain[argmax(chain, logprob)]
 
 _mapround(y, digits=4) = map(er->map(x->round(x, digits=digits), er), y)
@@ -98,7 +118,7 @@ function convergence(chain::Chain; burn=0.5, digits=4)
     return map(x->round(x[1], digits=digits), ess_rhat(chains))
 end
 
-function _burnpos(len, burn)
+function _burnlength(len, burn)
     if burn > 0
         if 0 < burn < 1
             burn = round(Int, burn * len)
@@ -131,7 +151,7 @@ In-place burn-in
 """
 function burn!(chain::Chain, burn=0)
 
-    burn = _burnpos(length(chain), burn)
+    burn = _burnlength(length(chain), burn)
 
     # Set end before burn in case we are burning
     # the whole chain
@@ -146,17 +166,9 @@ end
 """
     burn(chain, burn=0)
 
-Burn-in a copy of the chain
-
-### Arguments
-- If `burn` is a positive integer, the first `burn` samples are removed.
-- If `burn` is a negative integer, only the last `|burn|` samples are kept.
-- If `burn` is a float between 0 and 1, the fist `burn * length(chain)` samples are removed.
-- If `burn` is a float between -1 and 0, the last `|burn| * length(chain)` samples are kept.
+Burn-in a copy of the chain, see `burn!`
 """
-function burn(chain, burn=0)
-    return burn!(deepcopy(chain), burn)
-end
+burn(chain, burn=0) = burn!(deepcopy(chain), burn)
 
 """
     advance_chain!(chain::Chain, nbiter; ess50target=100, essparam=:logensity, progressoutput=:repl)
@@ -183,8 +195,8 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
     if progressoutput === :repl
         progressio = stderr
     elseif progressoutput === :file
-        progressoutput = "progress_pid$(getpid()).txt"
-        progressio = open(progressoutput, "w")
+        progressoutputfn = "progress_pid$(getpid()).txt"
+        progressio = open(progressoutputfn, "w")
     end
 
     if !(nbiter isa Int)
@@ -195,7 +207,8 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
         _nbiter = nbiter
     end
 
-    conv = "wait len(chain) >= 20"
+    _conv = "wait 40"
+    conv = (ess=NaN, rhat=NaN)
     for n in 1:_nbiter
         isfile("stop") && break
         # advance!(chain.sampler, chain.cgtree, maxsubtree=chain.maxsubtree)
@@ -203,15 +216,16 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
         push!(chain.logprob_chain, s.current_logprob)
         push!(chain.params_chain, deepcopy(s.params))
 
-        if length(chain) >= 20 && (mod(n-1, 10) == 0)
+        if length(chain) >= 100 && (mod(n-1, 10) == 0)
             conv = convergence(chain, burn=0.5)
+            _conv = "$(conv)"
         end
 
         next!(prog, showvalues=[
             ("iteration", n),
             ("chain length", length(chain)),
-            ("logprob", @sprintf("%.2f", s.current_logprob)),
-            ("convergence (burn 50%)", conv)
+            ("logprob (best @ idx)", @sprintf("%.2f (%.2f @ %i)", s.current_logprob, maximum(chain.logprob_chain), argmax(chain))),
+            ("convergence (burn 50%)", _conv)
         ])
 
         if nbiter === :ess && conv.ess >= ess50target
@@ -220,10 +234,11 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
         end
 
     end
+    finish!(prog)
 
     if progressoutput === :file
         close(progressio)
-        rm(progressoutput)
+        rm(progressoutputfn)
     end
 
     return chain

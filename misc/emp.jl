@@ -1,34 +1,46 @@
-using Distributed
-using PrettyTables
-addprocs(96)
+#!/usr/bin/env -S julia --color=yes --startup-file=no
 
-@everywhere begin
-    using Revise
-    using PhyloCG
-    using JLD2
-    using JSON
-    include("misc/loadsubtrees.jl")
+using Distributed
+using PhyloCG
+using JLD2
+using JSON
+
+if restartworkers
+    rmprocs(workers())
+    addprocs(96, 
+            topology=:master_worker,
+            env=["JULIA_NUM_THREADS"=>"1"]
+            )
+    wp = WorkerPool(workers())
 end
 
 @everywhere begin
-    function workerfun(ontology; model="fbdh", maxsubtree=Inf, initmaxsubtree=200, nbinititer=777)
-        include("misc/loadsubtrees.jl")
+    using PhyloCG
+    using JLD2
+    using JSON
+    include("$(pwd())/misc/loadsubtrees.jl")
+end
+
+@everywhere begin
+    function workerfun(ontology; model="fbdh", nbiter=:ess, maxsubtree=Inf, ess50target=200, initmaxsubtree=400, nbinititer=777)
+        # include("misc/loadsubtrees.jl")
         data = unique_data[ontology]
-
-
         chain = Chain(data, AMWG(model), maxsubtree=initmaxsubtree)
         # Fast-initialize using a small maxsubtree
         # to quickly find a good spot in parameter space
         # to start the slower MCMC chain
-        advance_chain!(chain, nbinititer, pretty_progress=:file)
+        advance_chain!(chain, nbinititer, progressoutput=:file)
         burn!(chain, nbinititer)
-        chain.maxsubtree = maxsubtree
-        chain.sampler.current_logprob = logdensity(chain.cgtree, chain.sampler.params, maxsubtree=chain.maxsubtree)
-        chain.params_chain[1] = chain.sampler.current_logprob
+        newmaxsubtree!(chain, maxsubtree)
+        chain.logprob_chain[1] = chain.sampler.current_logprob
+        advance_chain!(chain, nbiter, ess50target=ess50target, progressoutput=:file)
 
         prefix = "results/$(ontology).$(model)_length$(length(chain))_maxmax$(maxmax(data))_maxsubtree$(maxsubtree)"
+        chainfile = prefix * ".jld2"
+        resultfile = prefix * ".json"
 
         results = Dict(
+            "length" => length(chain),
             "ontology" => ontology,
             "model" => model,
             "bestsample" => NamedTuple(bestsample(chain)),
@@ -37,17 +49,17 @@ end
             "maxsubtree" => maxsubtree
         )
 
-        jldsave(prefix * ".jld2",
+        jldsave(chainfile,
             chain=chain,
             ontology=ontology,
             results=results
             )
 
-        open(prefix * ".json", "w") do io
+        open(resultfile, "w") do io
             write(io, json(results, 4))
         end
 
-        run(`gzip -f $(resultfile)`)
+        run(`gzip -f $(chainfile)`)
 
         return results
     end
@@ -57,10 +69,10 @@ jobs = []
 for ontology in keys(unique_data)
     push!(jobs, remotecall(workerfun, wp,
                            ontology,
-                           nbiter=100,
                            model="fbdh",
-                           maxsubtree=512
+                           maxsubtree=5000,
+                           nbiter=:ess, ess50target=200,
+                           initmaxsubtree=400, nbinititer=777
                            )
          )
-    break
 end

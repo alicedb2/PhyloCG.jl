@@ -33,7 +33,7 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf, ssdco
             # _ps = reverse(cumsum(reåverse(_ps)))
         end
         _ps = exp.(_logphis)
-        lb = minimum(vcat(ps, _ps)/2)
+        lb = minimum(vcat(ps, _ps)/ℯ)
         barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=(ssdcolor, ssdalpha), strokecolor=(ssdcolor, ssdalpha));
         stairs!(ax, 1:length(_ps), _ps, step=:center, color=modelcolor, linewidth=5);
         # ylims!(ax, minimum(filter(x-> x > 0, _ps))/4, ℯ)
@@ -103,12 +103,7 @@ function plotssds(cgtree, params=nothing; cumulative=false, modelK=Inf, secondcg
     end
 end
 
-function plotssds(chain::Chain; bestparams=true, cumulative=false, modelK=Inf)
-    if bestparams
-        params = bestsample(chain)
-    else
-        params = nothing
-    end
+function plotssds(chain::Chain, params=bestsample(chain); cumulative=false, modelK=Inf)
     if isfinite(chain.maxsubtree)
         return plotssds(chain.cgtree, params, cumulative=cumulative, modelK=modelK, secondcgtree=chain.truncated_cgtree)
     else
@@ -130,7 +125,8 @@ Plot the trance and marginal distributions of the log density and parameters of 
 """
 function plot(chain::Chain; burn=0)
 
-    burnidx = _burnpos(length(chain), burn)
+    burnidx = _burnlength(length(chain), burn)
+    bestidx = argmax(chain)
 
     with_theme(theme_minimal()) do
         nbparams = sum(chain.sampler.mask[:])
@@ -140,7 +136,6 @@ function plot(chain::Chain; burn=0)
 
         axtrace = Axis(fig[1, 1], title="log density", xlabel="iteration", ylabel="log density");
         samples = chainsamples(chain, :logdensity, burn=burn)
-        bestidx = argmax(samples)
         lines!(axtrace, burnidx+1:length(chain), samples, color=Cycled(1), linewidth=2);
         vlines!(axtrace, [bestidx], color=Cycled(6), linestyle=:dash, linewidth=4);
         axmarginal = Axis(fig[1, 2], title="log density", xlabel="log density", ylabel="probability");
@@ -148,8 +143,9 @@ function plot(chain::Chain; burn=0)
 
         for (i, k) in enumerate(findall(chain.sampler.mask[:]))
             axtrace = Axis(fig[i+1, 1], xlabel="iteration", ylabel=_labels[k]);
-            samples = chainsamples(chain, k, burn=burn)
+            samples = chainsamples(chain, k)
             bestval = samples[bestidx]
+            samples = samples[burnidx+1:end]
             lines!(axtrace, burnidx+1:length(chain), samples, color=Cycled(1), linewidth=2);
             vlines!(axtrace, [bestidx], color=Cycled(6), linestyle=:dash, linewidth=4);
             axmarginal = Axis(fig[i+1, 2], xlabel=_labels[k], ylabel="probability");

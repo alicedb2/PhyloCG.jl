@@ -2,7 +2,11 @@ const CGTree = Dict{@NamedTuple{t::Float64, s::Float64}, DefaultDict{Int, Int, I
 const Bouquet = @NamedTuple{trunk::@NamedTuple{i::Int, t::Float64, s::Float64, k::Int}, crown::@NamedTuple{i::Int, t::Float64, s::Float64, ks::Vector{Int}}}
 const ModelSSDs = Dict{@NamedTuple{t::Float64, s::Float64}, Vector{Float64}}
 
-function Base.size(cgtree::CGTree)
+function nbks(cgtree::CGTree)
+    return sum([length(keys(ssd)) for ssd in values(cgtree)])
+end
+
+function nbsubtrees(cgtree::CGTree)
     return sum([sum(values(ssd)) for ((t, s), ssd) in cgtree])
 end
 
@@ -89,12 +93,13 @@ end
 maxmax(cgtree) = maximum(maximum.(map(kn -> keys(kn), values(cgtree))))
 
 function truncate!(cgtree::CGTree, maxsubtree=Inf)
+    maxsubtree > 0 || throw(ArgumentError("maxsubtree must be positive"))
     for ssd in values(cgtree)
         filter!(ks -> ks[1] <= maxsubtree, ssd)
     end
     return cgtree
 end
 
-function Base.truncate(cgtree::CGTree, maxsubtree::Int)
+function Base.truncate(cgtree::CGTree, maxsubtree=Inf)
     return truncate!(deepcopy(cgtree), maxsubtree)
 end

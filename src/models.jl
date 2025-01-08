@@ -549,22 +549,39 @@ end
 # probability the chain will hit an integer
 # is pretty virtually zero.
 function initparams(;
-    f=0.999, b=1.0, d=1.0, rho=1.0, g=0.5, eta=1.0, alpha=5.0, beta=2.1,
+    rng=nothing,
+    f=0.5, 
+    b=1.0, d=1.0, 
+    rho=1.0, g=0.5, 
+    eta=1.0, alpha=5.0, beta=2.1,
     )
+    params = ComponentArray(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta))
+    if !isnothing(rng)
+        params.f = rand(rng, Truncated(Beta(0.5, 0.5), 0.01, 1.0))
+        params.b = rand(rng, Exponential())
+        params.d = rand(rng, Exponential())
+        params.i.rho = rand(rng, Exponential())
+        params.i.g = rand(rng, Beta(1.0, 1.0))
+        params.h.eta = rand(rng, Exponential())
+        params.h.alpha = rand(rng, Exponential(5.0))
+        params.h.beta = rand(rng, Exponential(2.0))
+    end
     if isinteger(beta)
         @warn "For numerical reasons beta cannot be an integer, adding a small perturbation"
         beta += 1e-6
     end
-    return ComponentArray(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta))
+    return params
 end
 
-function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool}, model::String="fbd")
+function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool}, model::String="fbd"; rng=nothing)
+
+    _initparams = initparams(rng=rng)
 
     if contains(model, "f")
         mask.f = true
-        if params.f == 1.0
-            params.f = initparams().f
-        end
+        # if params.f == 1.0
+        params.f = _initparams.f
+        # end
     else
         mask.f = false
         params.f = 1.0
@@ -572,9 +589,9 @@ function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool},
 
     if contains(model, "b")
         mask.b = true
-        if params.b == 0.0
-            params.b = initparams().b
-        end
+        # if params.b == 0.0
+        params.b = _initparams.b
+        # end
     else
         mask.b = false
         params.b = 0.0
@@ -582,9 +599,9 @@ function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool},
 
     if contains(model, "d")
         mask.d = true
-        if params.d == 0.0
-            params.d = initparams().d
-        end
+        # if params.d == 0.0
+        params.d = _initparams.d
+        # end
     else
         mask.d = false
         params.d = 0.0
@@ -592,9 +609,9 @@ function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool},
 
     if contains(model, "i")
         mask.i .= true
-        if params.i.rho == 0.0
-            params.i .= initparams().i
-        end
+        # if params.i.rho == 0.0
+        params.i .= _initparams.i
+        # end
     else
         mask.i .= false
         params.i.rho = 0.0
@@ -602,13 +619,19 @@ function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool},
 
     if contains(model, "h")
         mask.h .= true
-        if params.h.eta == 0.0
-            params.h .= initparams().h
-        end
+        # if params.h.eta == 0.0
+        params.h .= _initparams.h
+        # end
     else
         mask.h .= false
         params.h.eta = 0.0
     end
 
     return params, mask
+end
+
+function _sanitizemodel(s)
+    s = lowercase(s)
+    pcs = Set(filter!(c -> contains("fbdih", c), collect(s)))
+    return join(sort(collect(pcs), by=x-> Dict('f'=>1,'b'=>2,'d'=>3,'i'=>4,'h'=>5)[x]))
 end
