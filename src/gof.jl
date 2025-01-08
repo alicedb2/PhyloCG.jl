@@ -226,3 +226,26 @@ function burn!(chain::GOFChain, burn=0)
 end
 
 burn(chain::GOFChain, burn=0) = burn!(deepcopy(chain), burn)
+
+function gof_null(nbsamples, f, b, d, rho, g, eta, alpha, beta; nbslices=8, age=1.0, treesize=1000, verbose=false)
+
+    K = 2 * treesize
+    ts = LinRange(0.0, age, nbslices + 1)
+
+    modelssds = ModelSSDs()
+    for (s, t) in zip(ts[1:end-1], ts[2:end])
+        modelssds[(; t, s)] = logphis(K, t, s, f, b, d, rho, g, eta, alpha, beta)
+    end
+
+    G_samples = Float64[]
+
+    for k in 1:nbsamples
+        print("\r$k/$nbsamples")
+        cgtree, G = generate_cgtree(modelssds; treesize=treesize, verbose=verbose)
+        G_samples = [G_samples; G]
+    end
+    println()
+   
+    return (; G_samples, modelssds)
+
+end

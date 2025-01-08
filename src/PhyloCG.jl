@@ -37,7 +37,7 @@ include("matrix_exp.jl")
 export Lbdi, logphis_exp
 
 include("simulation.jl")
-export advance_gillespie_bdi, Pop
+export advance_gillespie_bdi, Pop, generate_cgtree
 
 include("singularities.jl")
 export bdih_singularity, bdihPhi_singularity, bdihPhi_optimal_radius
@@ -62,7 +62,7 @@ include("randompartitions.jl")
 export randompartitionAD5, conjugatepartition
 
 include("gof.jl")
-export GOFChain, Gstatistic, acceptancerate
+export GOFChain, Gstatistic, acceptancerate, gof_null
 
 include("plotting.jl")
 export plot, plotssd!, plotssd, plotssds

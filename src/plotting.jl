@@ -8,10 +8,10 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf, ssdco
     mass = sum(ns)
     max_empirical_k = maximum(ks)
 
-    ps = exp.(log.(ns) .- log(mass))
+    empirical_ps = exp.(log.(ns) .- log(mass))
     if cumulative
-        # ps = 1 .- vcat(0, cumsum(ps))[1:end-1]
-        ps = reverse(cumsum(reverse(ps)))
+        # empirical_ps = 1 .- vcat(0, cumsum(empirical_ps))[1:end-1]
+        empirical_ps = reverse(cumsum(reverse(empirical_ps)))
     end
 
     if params !== nothing
@@ -26,11 +26,16 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf, ssdco
         else
             throw(ArgumentError("params must be a ComponentArray or a ModelSSDs"))
         end
+
+        # _logphis = _logphis[1:max_empirical_k]
+        # _logphis .-= logsumexp(_logphis)
+
         if cumulative
             _logcumulsumexp = reduce((x, y) -> vcat(x, logaddexp(x[end], y)), _logphis, init=[-Inf])
             _logphis = log1mexp.(_logcumulsumexp)
+            # _ps = exp.(_logphis)
             # _ps = 1 .- vcat(0, cumsum(_ps))[1:end-1]
-            # _ps = reverse(cumsum(reåverse(_ps)))
+            # _ps = reverse(cumsum(reverse(_ps)))
         end
         _ps = exp.(_logphis)
         lb = minimum(vcat(ps, _ps)/ℯ)
@@ -42,8 +47,8 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf, ssdco
             ylims!(ax, lb, exp(1))
         end
     else
-        lb = minimum(ps)/2
-        barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=(ssdcolor, ssdalpha), strokecolor=(ssdcolor, ssdalpha));
+        lb = minimum(empirical_ps)/2
+        barplot!(ax, ks, empirical_ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=(ssdcolor, ssdalpha), strokecolor=(ssdcolor, ssdalpha));
         if setlims
             ylims!(ax, lb, ℯ);
             xlims!(ax, 1, max_empirical_k)
