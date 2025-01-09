@@ -85,7 +85,7 @@ for bin in values(binned_unique)
     unique_data[ontology] = data[ontology]
     unique_bins[ontology] = bin
 end
-ontologies_maxmax = sort!(map(kv -> (kv[1] => (maxmax(kv[2]), nbsubtrees(kv[2]))), collect(unique_data)), by=x->x[2][1])
+ontologies_maxmax = sort!(map(kv -> (kv[1] => (maxmax(kv[2]), nbsubtrees(kv[2]), size(kv[2]))), collect(unique_data)), by=x->x[2][1])
 ontologies_maxmax
 
 # Output produced:
