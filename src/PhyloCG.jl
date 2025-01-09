@@ -4,6 +4,7 @@ using Optim: optimize, NelderMead
 using DifferentialEquations
 using Phylo
 using Random
+using Random: default_rng
 using Distributions: Normal, Beta, Gamma, Truncated,
                      logpdf, MvNormal, MixtureModel,
                      Exponential, Uniform, Categorical,
@@ -62,7 +63,8 @@ include("randompartitions.jl")
 export randompartitionAD5, conjugatepartition
 
 include("gof.jl")
-export GOFChain, Gstatistic, acceptancerate, gof_null
+export GOFChain, Gstatistic, acceptancerate, 
+       gof_null, gof
 
 include("plotting.jl")
 export plot, plotssd!, plotssd, plotssds

@@ -207,7 +207,7 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
         _nbiter = nbiter
     end
 
-    _conv = "wait 40"
+    _conv = "wait 100"
     conv = (ess=NaN, rhat=NaN)
     for n in 1:_nbiter
         isfile("stop") && break

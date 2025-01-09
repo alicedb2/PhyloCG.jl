@@ -10,6 +10,14 @@ function nbsubtrees(cgtree::CGTree)
     return sum([sum(values(ssd)) for ((t, s), ssd) in cgtree])
 end
 
+function Base.size(cgtree::CGTree)
+    for (ts, ssd) in cgtree
+        if ts.s == 0.0
+            return sum([k * n for (k, n) in ssd])
+        end
+    end
+end
+
 function Base.isvalid(cgtree::CGTree)
     cgtree = sort!(collect(cgtree), by=tsssd->tsssd.first.t)
     first(cgtree).first.s == 0.0 || @warn "crown tip time != 0"

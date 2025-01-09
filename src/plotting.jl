@@ -10,8 +10,8 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf, ssdco
 
     empirical_ps = exp.(log.(ns) .- log(mass))
     if cumulative
-        # empirical_ps = 1 .- vcat(0, cumsum(empirical_ps))[1:end-1]
-        empirical_ps = reverse(cumsum(reverse(empirical_ps)))
+        empirical_ps = 1 .- vcat(0, cumsum(empirical_ps))[1:end-1]
+        # empirical_ps = reverse(cumsum(reverse(empirical_ps)))
     end
 
     if params !== nothing
@@ -30,16 +30,20 @@ function plotssd!(ax, slice, params=nothing; cumulative=false, modelK=Inf, ssdco
         # _logphis = _logphis[1:max_empirical_k]
         # _logphis .-= logsumexp(_logphis)
 
+        _ps = exp.(_logphis)
         if cumulative
             _logcumulsumexp = reduce((x, y) -> vcat(x, logaddexp(x[end], y)), _logphis, init=[-Inf])
             _logphis = log1mexp.(_logcumulsumexp)
-            # _ps = exp.(_logphis)
+
+            _ps = exp.(_logphis)
+
             # _ps = 1 .- vcat(0, cumsum(_ps))[1:end-1]
+            # or
             # _ps = reverse(cumsum(reverse(_ps)))
         end
-        _ps = exp.(_logphis)
-        lb = minimum(vcat(ps, _ps)/ℯ)
-        barplot!(ax, ks, ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=(ssdcolor, ssdalpha), strokecolor=(ssdcolor, ssdalpha));
+
+        lb = minimum(vcat(empirical_ps, _ps)/ℯ)
+        barplot!(ax, ks, empirical_ps, fillto=lb, gap=0.0, width=1.0, strokewidth=1.0, color=(ssdcolor, ssdalpha), strokecolor=(ssdcolor, ssdalpha));
         stairs!(ax, 1:length(_ps), _ps, step=:center, color=modelcolor, linewidth=5);
         # ylims!(ax, minimum(filter(x-> x > 0, _ps))/4, ℯ)
         if setlims
@@ -174,4 +178,8 @@ function plot(chain::GOFChain; burn=0)
         vlines!(ax, [empiricalG], color=Cycled(2), linestyle=:dash, linewidth=2, label="Empirical G");
         return fig
     end
+end
+
+function plot(gof::GOF)
+
 end

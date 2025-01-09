@@ -31,55 +31,61 @@ function advance_gillespie_bdih(tk::Pop, b, d, rho, g, eta, alpha, beta; max_age
     end
 end
 
-function generate_ssd(crownsize, modelssd)
+function generate_ssd(crownsize, modelssd; condition_on_size=false, rng=default_rng())
 
     @assert length(modelssd) >= crownsize
     if length(modelssd) < 2 * crownsize
         @warn "Model SSD may be too small for crown size, ideally it should be at least twice the crown size"
     end
-    
+
     ssd = DefaultDict{Int, Int, Int}(0)
     remaining = crownsize
     while remaining > 0
         _modelssd = modelssd[1:remaining]
-        lognorm = logsumexp(_modelssd)
-        _modelssd .-= lognorm
-        k = rand(Categorical(exp.(_modelssd)))
+        _modelssd .-= logsumexp(_modelssd)
+        k = rand(rng, Categorical(exp.(_modelssd)))
         remaining -= k
         ssd[k] += 1
     end
-    G = Gstatistic(ssd, modelssd)
+    if condition_on_size
+        G = Gstatistic(ssd, modelssd[1:crownsize] .- logsumexp(modelssd[1:crownsize]))
+    else
+        G = Gstatistic(ssd, modelssd)
+    end
     return (; ssd, G)
 end
 
-function generate_cgtree(modelssds; treesize=1000, verbose=false)
+function generate_cgtree(modelssds; treesize=1000, verbose=false, rng=default_rng())
 
     modelssds = sort(modelssds, by=x->x.t)
 
     cgtree = CGTree()
 
+    slice_Gs = Dict{@NamedTuple{t::Float64, s::Float64}, Float64}()
     G = 0.0
     crownsize = 0
     for (i, (ts, ssd)) in enumerate(modelssds)
-        t, s = ts        
+        t, s = ts
         if i == 1
             crownsize = treesize
         end
-        verbose && print("Sampling slice $i t=$(round(t, digits=4))  s=$(round(s, digits=4)) crown size=$remaining")
-        cgtree[(; t, s)], ssdG = generate_ssd(crownsize, ssd)
+        verbose && println("Sampling slice $i t=$(round(t, digits=4))  s=$(round(s, digits=4)) crown size=$crownsize")
+        cgtree[(; t, s)], ssdG = generate_ssd(crownsize, ssd, rng=rng)
         crownsize = sum(values(cgtree[(; t, s)]))
+        slice_Gs[(; t, s)] = ssdG
         G += ssdG
     end
 
-    return (; cgtree, G)
+    return (; cgtree, G, slice_Gs)
 
 end
 
-function generate_cgtree(f, b, d, rho, g, eta, alpha, beta; nbslices=8, age=1.0, treesize=1000, verbose=false)
+function generate_cgtree(f, b, d, rho, g, eta, alpha, beta; nbslices=8, age=1.0, treesize=1000, verbose=false, rng=default_rng())
 
     K = 2 * treesize
     ts = LinRange(0.0, age, nbslices + 1)
 
+    slice_Gs = Dict{@NamedTuple{t::Float64, s::Float64}, Float64}()
     modelssds = ModelSSDs()
     cgtree = CGTree()
 
@@ -91,11 +97,12 @@ function generate_cgtree(f, b, d, rho, g, eta, alpha, beta; nbslices=8, age=1.0,
         end
         verbose && println("Calculating slice $i t=$(round(t, digits=4))  s=$(round(s, digits=4)) crownsize=$crownsize...sampling")
         modelssds[(; t, s)] = logphis(K, t, s, f, b, d, rho, g, eta, alpha, beta)
-        cgtree[(; t, s)], ssdG = generate_ssd(crownsize, modelssds[(; t, s)])
+        cgtree[(; t, s)], ssdG = generate_ssd(crownsize, modelssds[(; t, s)], rng=rng)
         crownsize = sum(values(cgtree[(; t, s)]))
         K = 2 * crownsize
+        slice_Gs[(; t, s)] = ssdG
         G += ssdG
     end
 
-    return (; cgtree, G)
+    return (; cgtree, G, slice_G)
 end

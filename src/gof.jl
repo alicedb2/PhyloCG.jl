@@ -1,3 +1,5 @@
+const GOF = @NamedTuple{cgtree_p::Float64, cgtree_Gstat::Float64, slice_ps::Dict{@NamedTuple{t::Float64, s::Float64}, @NamedTuple{p::Float64, G::Float64}}, gof_null::@NamedTuple{G_samples::Vector{Float64}, slice_Gs_samples::Dict{@NamedTuple{t::Float64, s::Float64}, Vector{Float64}}, modelssds::Dict{@NamedTuple{t::Float64, s::Float64}, Vector{Float64}}}}
+
 mutable struct GOFChain
     cgtree::CGTree
     curr_cgtree::CGTree
@@ -80,12 +82,19 @@ G = \sum_{(t, s)} G(ssd(t, s))
 ### Returns
 - `G::Float64`: the G-statistic of the whole coarse-grained tree
 """
-function Gstatistic(cgtree::CGTree, slicelogphis)
+function Gstatistic(cgtree::CGTree, slicelogphis; perslice=false)
+    slice_Gs = Dict()
     G = 0.0
     for (ts, ssd) in cgtree
-        G += Gstatistic(ssd, slicelogphis[ts])
+        sliceG = Gstatistic(ssd, slicelogphis[ts])
+        G += sliceG
+        slice_Gs[ts] = G
     end
-    return G
+    if perslice
+        return (; G, slice_Gs)
+    else
+        return G
+    end
 end
 
 """
@@ -227,25 +236,65 @@ end
 
 burn(chain::GOFChain, burn=0) = burn!(deepcopy(chain), burn)
 
-function gof_null(nbsamples, f, b, d, rho, g, eta, alpha, beta; nbslices=8, age=1.0, treesize=1000, verbose=false)
+function gof_null(nbsamples, f, b, d, rho, g, eta, alpha, beta; nbslices=8, age=1.0, treesize=1000, verbose=false, rng=default_rng())
 
     K = 2 * treesize
-    ts = LinRange(0.0, age, nbslices + 1)
+
+    if age isa Float64
+        ts = LinRange(0.0, age, nbslices + 1)
+        tss = @NamedTuple{s::Float64, t::Float64}.(collect(zip(ts[1:end-1], ts[2:end])))
+    elseif collect(age) isa Vector{@NamedTuple{t::Float64, s::Float64}}
+        tss = sort(collect(age), by=x->x.t)
+    end
+
+    println(tss)
 
     modelssds = ModelSSDs()
-    for (s, t) in zip(ts[1:end-1], ts[2:end])
-        modelssds[(; t, s)] = logphis(K, t, s, f, b, d, rho, g, eta, alpha, beta)
+    for(i, ts) in enumerate(tss)
+        verbose && println("Computing model SSD for slice $i/$(length(tss)) (t=$(ts.t), s=$(ts.s))")
+        modelssds[(; t=ts.t, s=ts.s)] = logphis(K, ts.t, ts.s, f, b, d, rho, g, eta, alpha, beta)
     end
 
     G_samples = Float64[]
+    slice_Gs_samples = DefaultDict{@NamedTuple{t::Float64, s::Float64}, Vector{Float64}}(Vector{Float64})
 
     for k in 1:nbsamples
-        print("\r$k/$nbsamples")
-        cgtree, G = generate_cgtree(modelssds; treesize=treesize, verbose=verbose)
+        verbose && print("\r$k/$nbsamples")
+        _cgtree, G, slice_Gs = generate_cgtree(modelssds; treesize=treesize, verbose=false, rng=rng)
         G_samples = [G_samples; G]
+        for (ts, slice_G) in slice_Gs
+            push!(slice_Gs_samples[ts], slice_G)
+        end
     end
     println()
-   
-    return (; G_samples, modelssds)
 
+    return (; G_samples, slice_Gs_samples=Dict(slice_Gs_samples), modelssds)
+end
+
+gof_null(nbsamples, params::ComponentArray; nbslices=8, age=1.0, treesize=1000, verbose=false, rng=default_rng()) = gof_null(nbsamples, params.f, params.b, params.d, params.i.rho, params.i.g, params.h.eta, params.h.alpha, params.h.beta; nbslices=nbslices, age=age, treesize=treesize, verbose=verbose, rng=rng)
+
+function gof(cgtree, params, nbsamples=200; verbose=false, rng=default_rng())
+
+    _gof_null = gof_null(nbsamples, params; age=keys(cgtree), treesize=size(cgtree), verbose=verbose, rng=rng)
+
+    slice_ps = Dict{@NamedTuple{t::Float64, s::Float64}, @NamedTuple{p::Float64, G::Float64}}()
+    cgtree_Gstat = 0.0
+    for (ts, G_samples) in _gof_null.slice_Gs_samples
+        slice_Gstat = Gstatistic(cgtree[ts], _gof_null.modelssds[ts])
+        slice_ps[ts] = (p=quantilerank(G_samples, slice_Gstat), G=slice_Gstat)
+        cgtree_Gstat += slice_Gstat
+    end
+    cgtree_p = quantilerank(_gof_null.G_samples, cgtree_Gstat)
+
+    return (; cgtree_p, cgtree_Gstat, slice_ps, gof_null=_gof_null)
+end
+
+function Base.show(io::IO, gof::GOF)
+    println(io, "GOF")
+    println(io, "cgtree p-value: $(gof.cgtree_p)")
+    println(io, "cgtree G-statistic: $(gof.cgtree_Gstat)")
+    println(io, "slice p-values:")
+    for (ts, ps) in sort(gof.slice_ps, by=x->x[1])
+        println(io, "  $(ts.t) $(ts.s): p=$(ps.p), G=$(ps.G)")
+    end
 end
