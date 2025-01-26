@@ -247,8 +247,6 @@ function gof_null(nbsamples, f, b, d, rho, g, eta, alpha, beta; nbslices=8, age=
         tss = sort(collect(age), by=x->x.t)
     end
 
-    println(tss)
-
     modelssds = ModelSSDs()
     for(i, ts) in enumerate(tss)
         verbose && println("Computing model SSD for slice $i/$(length(tss)) (t=$(ts.t), s=$(ts.s))")
@@ -273,7 +271,7 @@ end
 
 gof_null(nbsamples, params::ComponentArray; nbslices=8, age=1.0, treesize=1000, verbose=false, rng=default_rng()) = gof_null(nbsamples, params.f, params.b, params.d, params.i.rho, params.i.g, params.h.eta, params.h.alpha, params.h.beta; nbslices=nbslices, age=age, treesize=treesize, verbose=verbose, rng=rng)
 
-function gof(cgtree, params, nbsamples=200; verbose=false, rng=default_rng())
+function gof(cgtree, params, nbsamples=200; verbose=true, rng=default_rng())
 
     _gof_null = gof_null(nbsamples, params; age=keys(cgtree), treesize=size(cgtree), verbose=verbose, rng=rng)
 
@@ -291,10 +289,10 @@ end
 
 function Base.show(io::IO, gof::GOF)
     println(io, "GOF")
-    println(io, "cgtree p-value: $(gof.cgtree_p)")
-    println(io, "cgtree G-statistic: $(gof.cgtree_Gstat)")
+    println(io, "cgtree p-value: $(round(gof.cgtree_p, digits=3))")
+    println(io, "cgtree G-statistic: $(round(gof.cgtree_Gstat, digits=3))")
     println(io, "slice p-values:")
     for (ts, ps) in sort(gof.slice_ps, by=x->x[1])
-        println(io, "  $(ts.t) $(ts.s): p=$(ps.p), G=$(ps.G)")
+        println(io, "  t=$(round(ts.t, digits=3)) s=$(round(ts.s, digits=3)):   p=$(round(ps.p, digits=3)),   G=$(round(ps.G, digits=3))")
     end
 end

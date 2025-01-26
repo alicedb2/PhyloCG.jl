@@ -63,7 +63,7 @@ include("randompartitions.jl")
 export randompartitionAD5, conjugatepartition
 
 include("gof.jl")
-export GOFChain, Gstatistic, acceptancerate, 
+export GOFChain, Gstatistic, acceptancerate,
        gof_null, gof
 
 include("plotting.jl")

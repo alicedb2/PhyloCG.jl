@@ -181,5 +181,23 @@ function plot(chain::GOFChain; burn=0)
 end
 
 function plot(gof::GOF)
+    with_theme(theme_minimal()) do
+        nbslices = length(keys(gof.slice_ps))
+        fig = Figure(size=(1600, 500 * (1 + div(nbslices + 1, 2))), fontsize=30);
 
+        ax = Axis(fig[1, 1:2], title="G-statistic", xlabel="G", ylabel="Frequency");
+        hist!(ax, gof.gof_null.G_samples, color=Cycled(1), normalization=:pdf, label="Null distribution");
+        vlines!(ax, [gof.cgtree_Gstat], color=Cycled(2), linestyle=:dash, linewidth=4, label="Empirical G");
+        
+        # fig[div(i-1, 2)+1, mod1(i, 2)]
+        
+        for (i, ts) in enumerate(sort(collect(keys(gof.slice_ps))))
+            t, s = ts
+            ax = Axis(fig[div(i-1, 2)+2, mod1(i, 2)], title="G-statistic of slice (t=$(round(t, digits=3)), s=$(round(s, digits=3)))", xlabel="G", ylabel="Frequency");
+            hist!(ax, gof.gof_null.slice_Gs_samples[ts], color=Cycled(1), normalization=:pdf, label="Null distribution");
+            vlines!(ax, [gof.slice_ps[ts].G], color=Cycled(2), linestyle=:dash, linewidth=4, label="Empirical G");
+        end
+        
+        return fig
+    end
 end
