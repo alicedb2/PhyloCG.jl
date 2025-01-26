@@ -102,15 +102,20 @@ function ess_rhat(chain::Chain, syms...; burn=0, digits=4)
     end
 end
 
-function convergence(chain::Chain; burn=0.5, digits=4)
+function convergence(chain::Chain; burn=0.5, digits=4, standardize=true)
     paramsamples = chainsamples(chain, burn=burn)
     # Remove parameters absent from the model
     paramsamples = paramsamples[.!allequal.(eachrow(paramsamples)), :]
+
     # Append logprob chain
-    logprobs = chainsamples(chain, :logdensity, burn=0.5)'
-    chains = vcat(logprobs, paramsamples)'
+    # logprobs = chainsamples(chain, :logdensity, burn=0.5)'
+    # chains = vcat(logprobs, paramsamples)'
+    chains = vcat(paramsamples)'
+
     # Standardize chains
-    chains = (chains .- mean(chains, dims=1)) ./ std(chains, dims=1)
+    if standardize
+        chains = (chains .- mean(chains, dims=1)) ./ std(chains, dims=1)
+    end
     # Reshape chains for ess_rhat such that each parameter + logprob
     # chain is considered as a separate chain of the same process
     # instead of a single chain with multiple parameters
@@ -127,7 +132,7 @@ function _burnlength(len, burn)
         if -1 < burn < 0
             burn = round(Int, -burn * len)
         end
-        burn = len + burn
+        burn = len - burn
     elseif iszero(burn)
         return 0
     end
