@@ -4,7 +4,7 @@ using Optim: optimize, NelderMead
 using DifferentialEquations
 using Phylo
 using Random
-using Random: default_rng
+using Random: default_rng, MersenneTwister
 using Distributions: Normal, Beta, Gamma, Truncated,
                      logpdf, MvNormal, MixtureModel,
                      Exponential, Uniform, Categorical,
@@ -15,7 +15,9 @@ using StatsFuns: logsumexp, logaddexp, logit,
 
 using SpecialFunctions: loggamma, logabsgamma, polygamma
 using HypergeometricFunctions: _₂F₁, _₂F₁maclaurin
-using LinearAlgebra: diagind, diagm, I
+using LinearAlgebra: diagind, diagm, I, LowerTriangular, norm
+                     Cholesky, lowrankupdate!, lowrankdowndate!
+
 using DataStructures: DefaultDict
 using FFTW: irfft
 using ComponentArrays: ComponentArray, labels, getaxes
@@ -47,16 +49,18 @@ export _saddlepoint_cond, _saddlepoint_cond2
 include("models.jl")
 export _bdih!, _bdih, Ubdih, Phi, dPhi
 export logphis, slicelogprob, cgtreelogprob, logdensity
-export initparams
-export _ea, _uv, _uvw, _eab
+export uvw, ηαβ
+export initmodel
 
 include("samplers.jl")
-export AMWG, AM, LatentSlice, advance!, acceptancerate
+export RAM, advance!, acceptancerate
+# export AMWG, AM, LatentSlice
+
 
 include("chain.jl")
 export Chain, advance_chain!,
        chainsamples, bestsample,
-       ess_rhat, convergence,
+       ess_rhat, convergence, acceptancerate
        newmaxsubtree!, burn!, burn, nbks, nbsubtrees
 
 include("randompartitions.jl")

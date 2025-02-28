@@ -232,7 +232,7 @@ function logphis(K, t, s, f, b, d, rho, g, eta, alpha, beta; gap=1/(K+1), optimi
 
     K += 1
 
-    if t < s || s < 0.0 || !(0 < f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 < g < 1) || eta < 0 || alpha <= 0 || beta <= 0
+    if t < s || s < 0.0 || !(0.01 < f <= 1) || b < 0 || d < 0 || rho < 0 || !(0 < g < 1) || eta < 0 || alpha <= 0 || beta <= 0
         return fill(-Inf, K)
     end
 
@@ -452,14 +452,118 @@ end
 # variable w to the bunch because with the change
 # (eta, alpha, beta) -> (u, v, beta)
 # v is then further strongly correlated with beta.
-_uvw(eta, alpha, beta) = [1/2 * log(eta / alpha), sqrt(eta * alpha), beta / sqrt(eta * alpha)]
-_eab(u, v, w) = [v * exp(u), v * exp(-u), v * w]
-function logjac_deabduvw(eta, alpha, _beta)
-    try
+function uvw(eta, alpha, beta)
+    return [1/2 * log(eta / alpha), sqrt(eta * alpha), beta / sqrt(eta * alpha)]
+end
+
+function ηαβ(u, v, w)
+    η = v >= 0 ? v * exp(u) : NaN
+    α = v >= 0 ? v * exp(-u) : NaN
+    β = v >= 0 ? v * w : NaN
+    return [η, α, β] 
+end
+
+function logjac_dηαβduvw(eta, alpha, _beta)
+    if eta > 0 && alpha > 0
         return log(2) + log(eta) + log(alpha)
-    catch _
+    else
         return -Inf
     end
+end
+
+σ(x) = 1 / (1 + exp(-x))
+
+function transform!(params::ComponentArray, mask::ComponentArray{Bool})
+
+    if mask.f
+        params.f = logit(params.f)
+    end
+
+    if mask.b
+        params.b = log(params.b)
+    end
+
+    if mask.d
+        params.d = log(params.d)
+    end
+
+    if all(mask.i)
+        params.i.rho = log(params.i.rho)
+        params.i.g = logit(params.i.g)
+    end
+
+    if all(mask.h)
+        params.h .= uvw(params.h...)
+    end
+
+    return params
+
+end
+
+function backtransform!(transformedparams::ComponentArray, mask::ComponentArray{Bool})
+    
+    tp = transformedparams
+
+    if mask.f
+        tp.f = σ(tp.f)
+    end
+
+    if mask.b
+        tp.b = exp(tp.b)
+    end
+
+    if mask.d
+        tp.d = exp(tp.d)
+    end
+
+    if all(mask.i)
+        tp.i.rho = exp(tp.i.rho)
+        tp.i.g = σ(tp.i.g)
+    end
+
+    if all(mask.h)
+        tp.h .= ηαβ(tp.h...)
+    end
+
+    return tp
+
+end
+
+transform(params::ComponentArray, mask::ComponentArray{Bool}) = transform!(copy(params), mask)
+backtransform(tparams::ComponentArray, mask::ComponentArray{Bool}) = backtransform!(copy(tparams), mask)
+
+function log_hastings_ratio(newparams::ComponentArray, currentparams::ComponentArray, mask::ComponentArray{Bool})
+
+        np = newparams
+        cp = currentparams
+
+        logh = 0.0
+        
+        # f -> logit f
+        if mask.f
+            logh += log(cp.f) + log(1 - cp.f) - log(np.f) - log(1 - np.f)
+        end
+
+        # (b, d, rho) -> log (b, d, rho)
+        if mask.b
+            logh += log(np.b) - log(cp.b)
+        end
+
+        if mask.d
+            logh += log(np.d) - log(cp.d)
+        end
+        if all(mask.i)
+            logh += log(np.i.rho) - log(cp.i.rho)
+            # g -> logit g
+            logh += log(cp.i.g) + log(1 - cp.i.g) - log(np.i.g) - log(1 - np.i.g)
+        end
+
+        # eta, alpha, beta -> u, v, w
+        if all(mask.h)
+            logh += log(np.h.eta) + log(np.h.alpha) - log(cp.h.eta) - log(cp.h.alpha)
+        end
+
+    return logh
 end
 
 """
@@ -476,11 +580,13 @@ Priors for each process "fbdih" is included when `0 < f < 1`, `b > 0`, `d > 0`, 
 - `lp::Float64`: the log prior probability of the parameters
 """
 function log_priors(p::ComponentArray)
+    
     lp = 0.0
+
     # f = 1.0 signals the exclusion
     # of the sampling rate as a parameter
     # of the model
-    if p.f < 1.0
+    if p.f < 1
         lp += log_jeffreys_samplingrate(p.f)
     end
 
@@ -488,20 +594,20 @@ function log_priors(p::ComponentArray)
     # the exclusion of the corresponding
     # process in the model
 
-    if p.b != 0.0
+    if !iszero(p.b)
         lp += log_jeffreys_rate(p.b)
     end
 
-    if p.d != 0.0
+    if !iszero(p.d)
         lp += log_jeffreys_rate(p.d)
     end
 
-    if p.i.rho != 0.0
+    if !iszero(p.i.rho)
         lp += log_jeffreys_rate(p.i.rho)
         lp += log_jeffreys_geom(p.i.g)
     end
 
-    if p.h.eta != 0.0
+    if !iszero(p.h.eta)
         lp += log_jeffreys_rate(p.h.eta)
         lp += log_jeffreys_betadist(p.h.alpha, p.h.beta)
     end
@@ -548,40 +654,26 @@ end
 # This is not a problem in general since the
 # probability the chain will hit an integer
 # is pretty virtually zero.
-function initparams(;
-    rng=nothing,
-    f=0.5, 
-    b=1.0, d=1.0, 
-    rho=1.0, g=0.5, 
+function initmodel(
+    model="fbdih";
+    f=0.99,
+    b=1.0, d=1.0,
+    rho=1.0, g=0.5,
     eta=1.0, alpha=5.0, beta=2.1,
+    randomizewith::Union{Nothing, AbstractRNG}=nothing,
     )
-    params = ComponentArray(f=f, b=b, d=d, i=(rho=rho, g=g), h=(eta=eta, alpha=alpha, beta=beta))
-    if !isnothing(rng)
-        params.f = rand(rng, Truncated(Beta(0.5, 0.5), 0.01, 1.0))
-        params.b = rand(rng, Exponential())
-        params.d = rand(rng, Exponential())
-        params.i.rho = rand(rng, Exponential())
-        params.i.g = rand(rng, Beta(1.0, 1.0))
-        params.h.eta = rand(rng, Exponential())
-        params.h.alpha = rand(rng, Exponential(5.0))
-        params.h.beta = rand(rng, Exponential(2.0))
-    end
-    if isinteger(beta)
-        @warn "For numerical reasons beta cannot be an integer, adding a small perturbation"
-        beta += 1e-6
-    end
-    return params
-end
 
-function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool}, model::String="fbd"; rng=nothing)
-
-    _initparams = initparams(rng=rng)
+    params = ComponentArray(f=0.0, b=0.0, d=0.0, i=(rho=0.0, g=0.0), h=(eta=0.0, alpha=0.0, beta=0.0))
+    mask = (similar(params, Bool) .= false)
 
     if contains(model, "f")
         mask.f = true
-        # if params.f == 1.0
-        params.f = _initparams.f
-        # end
+        if isnothing(randomizewith)
+            0.01 < f < 1 || throw(ArgumentError("Incomplete lineage sampling rate must be between 0.01 (for numerical stability) and 1 (exclusive, f=1 is reserved for model with a prior on f)"))
+            params.f = f
+        else
+            params.f = rand(randomizewith, Truncated(Beta(0.5, 0.5), 0.01, 0.99))
+        end
     else
         mask.f = false
         params.f = 1.0
@@ -589,9 +681,12 @@ function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool},
 
     if contains(model, "b")
         mask.b = true
-        # if params.b == 0.0
-        params.b = _initparams.b
-        # end
+        if isnothing(randomizewith)
+            b > 0 || throw(ArgumentError("Birth rate must be greater than 0"))
+            params.b = b
+        else
+            params.b = rand(randomizewith, Exponential())
+        end
     else
         mask.b = false
         params.b = 0.0
@@ -599,9 +694,12 @@ function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool},
 
     if contains(model, "d")
         mask.d = true
-        # if params.d == 0.0
-        params.d = _initparams.d
-        # end
+        if isnothing(randomizewith)
+            d > 0 || throw(ArgumentError("Death rate must be greater than 0"))
+            params.d = d
+        else
+            params.d = rand(randomizewith, Exponential())
+        end
     else
         mask.d = false
         params.d = 0.0
@@ -609,25 +707,47 @@ function _setmodel!(params::ComponentArray{Float64}, mask::ComponentArray{Bool},
 
     if contains(model, "i")
         mask.i .= true
-        # if params.i.rho == 0.0
-        params.i .= _initparams.i
-        # end
+        if isnothing(randomizewith)
+            rho > 0 && 0 < g < 1 || throw(ArgumentError("Innovation model parameter must be rho > 0 and 0 < g < 1 "))
+            params.i.rho = rho
+            params.i.g = g
+        else
+            params.i.rho = rand(randomizewith, Exponential())
+            params.i.g = rand(randomizewith, Beta(1.0, 1.0))
+        end
     else
         mask.i .= false
         params.i.rho = 0.0
+        # Must be 0 < g < 1 or logphis will throw a -Inf
+        params.i.g = 0.5
     end
 
     if contains(model, "h")
         mask.h .= true
-        # if params.h.eta == 0.0
-        params.h .= _initparams.h
-        # end
+        if isnothing(randomizewith)
+            eta > 0 && alpha > 0 && beta > 0 || throw(ArgumentError("All parameters for heterogeneous innovation model must be greater than 0"))
+            params.h.eta = eta
+            params.h.alpha = alpha
+            params.h.beta = beta
+        else
+            params.h.eta = rand(randomizewith, Exponential())
+            params.h.alpha = rand(randomizewith, Exponential(5.0))
+            params.h.beta = rand(randomizewith, Exponential(2.0))
+        end
+        if isinteger(params.h.beta)
+            @warn "For numerical reasons beta cannot be an integer, adding a small perturbation"
+            params.h.beta += 1e-6
+        end
     else
         mask.h .= false
         params.h.eta = 0.0
+        # Must be > 0 or logphis will throw a -Inf
+        params.h.alpha = 5.0
+        params.h.beta = 2.1
     end
 
     return params, mask
+
 end
 
 function _sanitizemodel(s)

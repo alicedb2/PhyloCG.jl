@@ -5,6 +5,7 @@ mutable struct Chain
     params_chain::Vector{ComponentArray{Float64}}
     logprob_chain::Vector{Float64}
     maxsubtree::Real
+    rng::AbstractRNG
     # _probs::Vector{ODEProblem}
 end
 
@@ -21,16 +22,29 @@ Create a chain
 ### Returns
 - `chain::Chain`: the chain
 """
-function Chain(cgtree, sampler; maxsubtree=Inf)
+function Chain(cgtree, sampler; maxsubtree=Inf, seed=nothing)
     cgtree = deepcopy(cgtree)
     truncated_cgtree = deepcopy(cgtree)
     if isfinite(maxsubtree)
         truncated_cgtree = truncate!(truncated_cgtree, maxsubtree)
     end
     init_logprob = logdensity(cgtree, sampler.params, maxsubtree=maxsubtree)
+    sampler.current_logprob = init_logprob
     init_params = deepcopy(sampler.params)
-    chain = Chain(sampler, cgtree, truncated_cgtree, [init_params], [init_logprob], maxsubtree)
+    chain = Chain(sampler, cgtree, truncated_cgtree, [init_params], [init_logprob], maxsubtree, _getrng(seed))
     return chain
+end
+
+function _getrng(seed=nothing)
+    if isnothing(seed)
+        rng = MersenneTwister()
+    elseif seed isa AbstractRNG
+        rng = seed
+    elseif seed isa Int
+        rng = MersenneTwister(seed)
+    else
+        throw(ArgumentError("seed must be an AbstractRNG, an Integer, or nothing to get a general-purpose Mersenne twister"))
+    end
 end
 
 function newmaxsubtree!(chain::Chain, maxsubtree=Inf)
@@ -204,7 +218,7 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
         progressio = open(progressoutputfn, "w")
     end
 
-    if !(nbiter isa Int)
+    if !(nbiter isa Int) || nbiter < 0
         prog = ProgressUnknown(showspeed=true, output=progressio)
         _nbiter = typemax(Int64)
     else
@@ -215,7 +229,6 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
     _conv = "wait 100"
     conv = (ess=NaN, rhat=NaN)
     for n in 1:_nbiter
-        isfile("stop") && break
         # advance!(chain.sampler, chain.cgtree, maxsubtree=chain.maxsubtree)
         advance!(chain.sampler, chain.truncated_cgtree)
         push!(chain.logprob_chain, s.current_logprob)
@@ -238,6 +251,14 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
             break
         end
 
+        if isfile("stop")
+            if progressoutput === :repl
+                rm("stop")
+            end
+            break
+        end
+
+
     end
     finish!(prog)
 
@@ -248,3 +269,5 @@ function advance_chain!(chain::Chain, nbiter; ess50target=100, progressoutput=:r
 
     return chain
 end
+
+acceptancerate(chain::Chain) = round.(chain.sampler.acc ./ (chain.sampler.acc + chain.sampler.rej), digits=3)
